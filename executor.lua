@@ -3214,7 +3214,7 @@ function startNametagSystem(renderDistance)
 		box.AlwaysOnTop = true
 		box.ZIndex = 10
 		box.Size = root.Size
-		box.Transparency = 0.85
+		box.Transparency = 0.95
 		box.Color3 = root.Color
 		box.Visible = true
 		box.Parent = root
