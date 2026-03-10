@@ -434,6 +434,7 @@ local originalHitboxSizes = {}
 local originalHumanoidRootPartSizes = {}
 local hitboxAllMultiplier = nil
 local hitboxPlayerMultipliers = {}
+local hitboxIgnoreOwnTeam = false
 local hitboxCharacterConnections = {}
 local hitboxPlayerAddedConnection = nil
 local hitboxPlayerRemovingConnection = nil
@@ -1348,11 +1349,30 @@ local function refreshHitboxForPlayer(player)
 end
 
 local function refreshAllActiveHitboxes()
+
 	for _, player in ipairs(Players:GetPlayers()) do
+
 		if player ~= LocalPlayer then
-			refreshHitboxForPlayer(player)
+
+			local multiplier = hitboxPlayerMultipliers[player.UserId] or hitboxAllMultiplier
+
+			-- IGNORE OWN TEAM (REALTIME)
+			if hitboxIgnoreOwnTeam and player.Team == LocalPlayer.Team then
+				restoreHitboxForPlayer(player)
+				continue
+			end
+
+			-- APPLY HITBOX
+			if multiplier then
+				refreshHitboxForPlayer(player)
+			else
+				restoreHitboxForPlayer(player)
+			end
+
 		end
+
 	end
+
 end
 
 local function stopHitboxEnforcement()
@@ -1368,19 +1388,19 @@ local function startHitboxEnforcement()
 	if hitboxEnforcementConnection then
 		return
 	end
-
 	hitboxSystemEnabled = true
-
 	local RunService = game:GetService("RunService")
-
 	hitboxEnforcementConnection = RunService.RenderStepped:Connect(function()
 		if not hitboxSystemEnabled then
 			return
 		end
-
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer then
-				refreshHitboxForPlayer(player)
+				if hitboxIgnoreOwnTeam and player.Team == LocalPlayer.Team then
+					restoreHitboxForPlayer(player)
+				else
+					refreshHitboxForPlayer(player)
+				end
 			end
 		end
 	end)
@@ -1422,10 +1442,33 @@ local function ensureHitboxTracking()
 			end
 
 			hookHitboxCharacter(player)
+			player:GetPropertyChangedSignal("Team"):Connect(function()
+
+				if not hitboxSystemEnabled then
+					return
+				end
+
+				if hitboxIgnoreOwnTeam then
+					refreshAllActiveHitboxes()
+				end
+
+			end)
 
 			task.defer(function()
-				refreshHitboxForPlayer(player)
+				refreshAllActiveHitboxes()
 			end)
+		end)
+		-- detect local team changes
+		LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
+
+			if not hitboxSystemEnabled then
+				return
+			end
+
+			if hitboxIgnoreOwnTeam then
+				refreshAllActiveHitboxes()
+			end
+
 		end)
 	end
 
@@ -1444,8 +1487,11 @@ local function ensureHitboxTracking()
 	startHitboxEnforcement()
 end
 
-local function applyHitboxToPlayer(player, multiplier)
-	if not player or player == LocalPlayer then
+function applyHitboxToPlayer(player, multiplier)
+
+	if hitboxIgnoreOwnTeam and player.Team == LocalPlayer.Team then
+		hitboxPlayerMultipliers[player.UserId] = nil
+		refreshHitboxForPlayer(player)
 		return
 	end
 
@@ -1868,9 +1914,11 @@ local Commands = {
 	{
 		Name = "hitbox",
 		Description = "Multiplies the hitbox area of the selected player, usage: 'hitbox all 1' for a 100% hitbox increase for every player",
-		Execute = function(targetName, multiplier)
+		Execute = function(targetName, multiplier, ignoreOwn)
+
 			targetName = tostring(targetName or "")
 			multiplier = tonumber(multiplier)
+			ignoreOwn = tostring(ignoreOwn or ""):lower()
 
 			if targetName == "" then
 				print("Missing target name")
@@ -1884,7 +1932,14 @@ local Commands = {
 
 			ensureHitboxTracking()
 
+			if ignoreOwn == "ignoreown" then
+				hitboxIgnoreOwnTeam = true
+			else
+				hitboxIgnoreOwnTeam = false
+			end
+
 			if string.lower(targetName) == "all" then
+
 				hitboxAllMultiplier = multiplier
 
 				for _, player in ipairs(Players:GetPlayers()) do
@@ -1895,11 +1950,18 @@ local Commands = {
 
 				hitboxSystemEnabled = true
 				refreshAllActiveHitboxes()
-				print("Applied persistent hitbox multiplier to all players:", multiplier)
+
+				if hitboxIgnoreOwnTeam then
+					print("Applied hitbox multiplier to everyone except your team:", multiplier)
+				else
+					print("Applied hitbox multiplier to all players:", multiplier)
+				end
+
 				return
 			end
 
 			local targetPlayer = findPlayerByName(targetName)
+
 			if not targetPlayer then
 				print("Player not found:", targetName)
 				return
@@ -1907,6 +1969,7 @@ local Commands = {
 
 			hitboxSystemEnabled = true
 			applyHitboxToPlayer(targetPlayer, multiplier)
+
 			print("Applied persistent hitbox multiplier to", targetPlayer.Name, multiplier)
 		end,
 	},
@@ -2346,7 +2409,7 @@ local function getCommandDisplayNameForHelp(cmd)
 	elseif cmd.Name == "blink" then
 		return "blink {distance}"
 	elseif cmd.Name == "hitbox" then
-		return "hitbox {player/all} {multiplier}"
+		return "hitbox {player/all} {multiplier} {ignoreown}"
 	elseif cmd.Name == "highlight" then
 		return "highlight {player/all} {distance}"
 	elseif cmd.Name == "goto" then
@@ -2641,7 +2704,7 @@ local function rebuildSuggestions(matches)
 				displayName = "blink {distance}"
 
 			elseif cmd.Name == "hitbox" then
-				displayName = "hitbox {player/all} {multiplier}"
+				displayName = "hitbox {player/all} {multiplier} {ignoreown}"
 
 			elseif cmd.Name == "highlight" then
 				displayName = "highlight {player/all} {distance}"
@@ -2740,13 +2803,14 @@ end
 local function updateSuggestions()
 	local rawText = commandInput.Text
 	local text = getSearchText(rawText)
+	local commandWord = string.split(text," ")[1] or ""
 
 	if text == "" then
 		resetSuggester()
 		return
 	end
 
-	local matches = getMatches(text)
+	local matches = getMatches(commandWord)
 	rebuildSuggestions(matches)
 
 	if matches[1] and matches[1].Name == "esp" then
@@ -2765,7 +2829,7 @@ local function updateSuggestions()
 		suggesterCommandName.Text = "blink {distance}"
 
 	elseif matches[1] and matches[1].Name == "hitbox" then
-		suggesterCommandName.Text = "hitbox {player/all} {multiplier}"
+		suggesterCommandName.Text = "hitbox {player/all} {multiplier} {ignoreown}"
 
 	elseif matches[1] and matches[1].Name == "highlight" then
 		suggesterCommandName.Text = "highlight {player/all} {distance}"
@@ -3214,7 +3278,7 @@ function startNametagSystem(renderDistance)
 		box.AlwaysOnTop = true
 		box.ZIndex = 10
 		box.Size = root.Size
-		box.Transparency = 0.95
+		box.Transparency = 0.85
 		box.Color3 = root.Color
 		box.Visible = true
 		box.Parent = root
