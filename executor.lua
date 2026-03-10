@@ -371,6 +371,8 @@ exampleHelperLabel.RichText = true
 -- SETTINGS
 --////////////////////////////////////////////////////
 
+local highlightObjects = {}
+local highlightConnections = {}
 local hitboxEnforcementConnection = nil
 local hitboxSystemEnabled = false
 local inputTextConnection = nil
@@ -1225,11 +1227,6 @@ local function findPlayerByName(inputName)
 	return nil
 end
 
--- 2) REPLACE your entire current hitbox block
--- from: local function cleanupHitboxPlayer(player)
--- down to: local function resetAllHitboxes()
--- with THIS:
-
 local function cleanupHitboxPlayer(player)
 	if not player then
 		return
@@ -1525,176 +1522,134 @@ local function resetAllHitboxes()
 	table.clear(originalHumanoidRootPartCanCollide)
 end
 
-local function removeHighlightFromCharacter(character)
-	if not character then
-		return
+highlightAllEnabled = highlightAllEnabled or false
+highlightMaxDistance = highlightMaxDistance or math.huge
+
+local function removeHighlight(character)
+	if highlightObjects[character] then
+		highlightObjects[character]:Destroy()
+		highlightObjects[character] = nil
 	end
-
-	local existing = character:FindFirstChild("ExecutorHighlight")
-	if existing then
-		existing:Destroy()
-	end
-end
-
-local function shouldPlayerBeHighlighted(player)
-	if not player or player == LocalPlayer then
-		return false
-	end
-
-	if highlightAllEnabled then
-		return true
-	end
-
-	return highlightedPlayers[player.UserId] == true
-end
-
-local function shouldHighlightBeVisible(player)
-	if not player or player == LocalPlayer then
-		return false
-	end
-
-	local localCharacter = LocalPlayer.Character
-	local localRoot = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
-	local targetCharacter = player.Character
-	local targetRoot = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
-
-	if not localRoot or not targetRoot then
-		return false
-	end
-
-	local distance = (targetRoot.Position - localRoot.Position).Magnitude
-	return distance <= highlightMaxDistance
 end
 
 local function applyHighlightToCharacter(player, character)
-	if not player or not character or player == LocalPlayer then
+	if not character then return end
+	if player == LocalPlayer then return end
+
+	if highlightObjects[character] then
 		return
 	end
-
-	local existing = character:FindFirstChild("ExecutorHighlight")
-	if existing then
-		existing:Destroy()
-	end
-
-	local teamColor = player.TeamColor.Color
 
 	local highlight = Instance.new("Highlight")
 	highlight.Name = "ExecutorHighlight"
-	highlight.Adornee = character
-	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	highlight.FillTransparency = 0.35
+	highlight.FillTransparency = 0.6
 	highlight.OutlineTransparency = 0
-	highlight.FillColor = teamColor
-	highlight.OutlineColor = teamColor
-	highlight.Enabled = shouldHighlightBeVisible(player)
+	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	highlight.Parent = character
+
+	highlightObjects[character] = highlight
 end
 
 local function updateHighlightVisibility()
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer and player.Character then
-			local highlight = player.Character:FindFirstChild("ExecutorHighlight")
-			if highlight then
-				highlight.Enabled = shouldPlayerBeHighlighted(player) and shouldHighlightBeVisible(player)
-			end
+
+	local localCharacter = LocalPlayer.Character
+	if not localCharacter then return end
+
+	local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localRoot then return end
+
+	for character, highlight in pairs(highlightObjects) do
+
+		if not character or not character.Parent then
+			highlightObjects[character] = nil
+			continue
 		end
+
+		local root = character:FindFirstChild("HumanoidRootPart")
+
+		if not root then
+			highlight.Enabled = false
+			continue
+		end
+
+		local distance = (root.Position - localRoot.Position).Magnitude
+
+		if distance <= highlightMaxDistance then
+			highlight.Enabled = true
+		else
+			highlight.Enabled = false
+		end
+
 	end
+
 end
 
-local function ensureHighlightRenderLoop()
-	if highlightRenderConnection then
+function highlightPlayer(player)
+
+	if player == LocalPlayer then return end
+
+	local character = player.Character
+	if character then
+		applyHighlightToCharacter(player, character)
+	end
+
+end
+
+function ensureHighlightTracking()
+
+	if highlightConnections.tracking then
 		return
 	end
 
+	local Players = game:GetService("Players")
 	local RunService = game:GetService("RunService")
 
-	highlightRenderConnection = RunService.RenderStepped:Connect(function()
-		updateHighlightVisibility()
-	end)
-end
+	-- character spawn tracking
+	local function trackPlayer(player)
 
-local function hookHighlightCharacter(player)
-	if not player or player == LocalPlayer then
-		return
-	end
+		player.CharacterAdded:Connect(function(character)
+			task.wait()
 
-	if highlightCharacterConnections[player] then
-		highlightCharacterConnections[player]:Disconnect()
-	end
-
-	highlightCharacterConnections[player] = player.CharacterAdded:Connect(function(character)
-		task.wait()
-
-		if shouldPlayerBeHighlighted(player) then
-			applyHighlightToCharacter(player, character)
-		else
-			removeHighlightFromCharacter(character)
-		end
-	end)
-
-	if player.Character then
-		if shouldPlayerBeHighlighted(player) then
-			applyHighlightToCharacter(player, player.Character)
-		else
-			removeHighlightFromCharacter(player.Character)
-		end
-	end
-end
-
-local function hookHighlightTeamColor(player)
-	if not player or player == LocalPlayer then
-		return
-	end
-
-	if highlightTeamConnections[player] then
-		highlightTeamConnections[player]:Disconnect()
-	end
-
-	highlightTeamConnections[player] = player:GetPropertyChangedSignal("TeamColor"):Connect(function()
-		if shouldPlayerBeHighlighted(player) and player.Character then
-			applyHighlightToCharacter(player, player.Character)
-		end
-	end)
-end
-
-local function ensureHighlightTracking()
-	if not highlightPlayerAddedConnection then
-		for _, player in ipairs(Players:GetPlayers()) do
-			hookHighlightCharacter(player)
-			hookHighlightTeamColor(player)
-		end
-
-		highlightPlayerAddedConnection = Players.PlayerAdded:Connect(function(player)
-			hookHighlightCharacter(player)
-			hookHighlightTeamColor(player)
+			if highlightAllEnabled then
+				applyHighlightToCharacter(player, character)
+			end
 		end)
+
+		if player.Character then
+			applyHighlightToCharacter(player, player.Character)
+		end
+
 	end
-
-	ensureHighlightRenderLoop()
-end
-
-local function highlightPlayer(player)
-	if not player or player == LocalPlayer then
-		return
-	end
-
-	highlightedPlayers[player.UserId] = true
-
-	if player.Character then
-		applyHighlightToCharacter(player, player.Character)
-	end
-end
-
-local function resetAllHighlights()
-	highlightAllEnabled = false
-	highlightMaxDistance = math.huge
-	table.clear(highlightedPlayers)
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer and player.Character then
-			removeHighlightFromCharacter(player.Character)
+		if player ~= LocalPlayer then
+			trackPlayer(player)
 		end
 	end
+
+	highlightConnections.playerAdded = Players.PlayerAdded:Connect(function(player)
+		trackPlayer(player)
+	end)
+
+	-- render loop like ESP
+	highlightConnections.tracking = RunService.RenderStepped:Connect(function()
+		updateHighlightVisibility()
+	end)
+
+end
+
+function resetAllHighlights()
+
+	highlightAllEnabled = false
+
+	for character, highlight in pairs(highlightObjects) do
+		if highlight then
+			highlight:Destroy()
+		end
+	end
+
+	table.clear(highlightObjects)
+
 end
 
 local function sanitizeCommandInput()
@@ -2018,6 +1973,7 @@ local Commands = {
 		Name = "highlight",
 		Description = "Highlights the specified players making them visible through walls, and displaying their animations in real time",
 		Execute = function(targetName, distance)
+
 			targetName = tostring(targetName or "")
 
 			if targetName == "" then
@@ -2039,30 +1995,31 @@ local Commands = {
 			ensureHighlightTracking()
 
 			if string.lower(targetName) == "all" then
+
 				highlightAllEnabled = true
-				table.clear(highlightedPlayers)
 
 				for _, player in ipairs(Players:GetPlayers()) do
 					if player ~= LocalPlayer then
-						applyHighlightToCharacter(player, player.Character)
+						highlightPlayer(player)
 					end
 				end
 
-				updateHighlightVisibility()
 				print("Applied highlights to all players with distance:", distance == math.huge and "infinite" or distance)
 				return
 			end
 
 			local targetPlayer = findPlayerByName(targetName)
+
 			if not targetPlayer then
 				print("Player not found:", targetName)
 				return
 			end
 
 			highlightPlayer(targetPlayer)
-			updateHighlightVisibility()
-			print("Applied highlight to", targetPlayer.Name, "with distance:", distance == math.huge and "infinite" or distance)
-		end,
+
+			print("Applied highlight to", targetPlayer.Name)
+
+		end
 	},
 	{
 		Name = "unhighlight",
