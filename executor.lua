@@ -1533,6 +1533,7 @@ local function removeHighlight(character)
 end
 
 local function applyHighlightToCharacter(player, character)
+
 	if not character then return end
 	if player == LocalPlayer then return end
 
@@ -1545,6 +1546,12 @@ local function applyHighlightToCharacter(player, character)
 	highlight.FillTransparency = 0.6
 	highlight.OutlineTransparency = 0
 	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+	-- TEAM COLOR
+	local teamColor = player.TeamColor.Color
+	highlight.FillColor = teamColor
+	highlight.OutlineColor = teamColor
+
 	highlight.Parent = character
 
 	highlightObjects[character] = highlight
@@ -1563,6 +1570,14 @@ local function updateHighlightVisibility()
 		if not character or not character.Parent then
 			highlightObjects[character] = nil
 			continue
+		end
+
+		local player = game.Players:GetPlayerFromCharacter(character)
+
+		if player then
+			local teamColor = player.TeamColor.Color
+			highlight.FillColor = teamColor
+			highlight.OutlineColor = teamColor
 		end
 
 		local root = character:FindFirstChild("HumanoidRootPart")
