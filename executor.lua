@@ -905,6 +905,7 @@ local populateHelpList
 local clearHelpEntries
 local hideHelpList
 local closeMenu
+local openMenu
 
 local function getCubeHitboxSize(originalSize, multiplier)
 	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
@@ -3539,7 +3540,15 @@ local function fadeWelcomeOut()
 	title2.Visible = false
 	title3.Visible = false
 	STATE.welcomeFinished = true
+
+	-- AUTO OPEN MENU AFTER REJOIN
+	task.defer(function()
+		if not STATE.menuOpen then
+			openMenu()
+		end
+	end)
 end
+
 
 local function playWelcomeSequence()
 	welcome.Visible = true
@@ -3703,7 +3712,7 @@ local function updateSuggestions()
 	suggesterCommandName.Text = STATE.currentBestMatch and getCommandDisplayNameForHelp(STATE.currentBestMatch) or "Command Name"
 end
 
-local function openMenu()
+openMenu = function()
 	STATE.menuOpen = true
 	bg.Visible = true
 	mainBg.BackgroundTransparency = 1
