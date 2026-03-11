@@ -1806,11 +1806,9 @@ end
 local function refreshAllActiveHitboxes()
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
-			local multiplier = STATE.hitboxPlayerMultipliers[player.UserId] or STATE.hitboxAllMultiplier
+			local multiplier = getActiveHitboxMultiplierForPlayer(player)
 
-			if STATE.hitboxIgnoreOwnTeam and player.Team == LocalPlayer.Team then
-				restoreHitboxForPlayer(player)
-			elseif multiplier then
+			if multiplier then
 				refreshHitboxForPlayer(player)
 			else
 				restoreHitboxForPlayer(player)
@@ -1818,6 +1816,7 @@ local function refreshAllActiveHitboxes()
 		end
 	end
 end
+
 
 local function applyStoredHitboxTransparency(player)
 	if not player or player == LocalPlayer then
@@ -1900,18 +1899,16 @@ local function hookHitboxCharacter(player)
 
 		task.wait(0.2)
 
-		if getActiveHitboxMultiplierForPlayer(player) ~= nil then
-			refreshHitboxForPlayer(player)
-			applyStoredHitboxTransparency(player)
-		end
+		-- Always refresh, the function decides apply or reset
+		refreshHitboxForPlayer(player)
+		applyStoredHitboxTransparency(player)
 	end)
 
 	if player.Character then
 		task.defer(function()
-			if getActiveHitboxMultiplierForPlayer(player) ~= nil then
-				refreshHitboxForPlayer(player)
-				applyStoredHitboxTransparency(player)
-			end
+			-- Always refresh here too
+			refreshHitboxForPlayer(player)
+			applyStoredHitboxTransparency(player)
 		end)
 	end
 end
@@ -1930,8 +1927,10 @@ local function ensureHitboxTracking()
 		player:GetPropertyChangedSignal("Team"):Connect(function()
 			task.defer(function()
 				refreshHitboxForPlayer(player)
+				applyStoredHitboxTransparency(player)
 			end)
 		end)
+
 
 		task.defer(function()
 			if getActiveHitboxMultiplierForPlayer(player) ~= nil then
@@ -1974,8 +1973,10 @@ function applyHitboxToPlayer(player, multiplier)
 end
 
 local function resetAllHitboxes()
+	STATE.hitboxSystemEnabled = false
 	STATE.hitboxAllMultiplier = nil
 	table.clear(STATE.hitboxPlayerMultipliers)
+	table.clear(STATE.hitboxTeamMultipliers)
 
 	stopHitboxEnforcement()
 
