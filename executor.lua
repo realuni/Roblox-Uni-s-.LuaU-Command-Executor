@@ -2264,6 +2264,13 @@ end
 -- override global print
 _G.print = executorPrint
 
+local function getKeyDisplayName(keyCode)
+	if keyCode == Enum.KeyCode.Semicolon then
+		return ";"
+	end
+	return keyCode.Name
+end
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- COMMANDS
 --////////////////////////////////////////////////////
@@ -3337,6 +3344,8 @@ addCommand("cmdrbind {key}", "Changes the key used to open the command menu", fu
 
 	saveBinds()
 
+	helperBg.Visible = true
+
 	print("[SUCCESS] Command menu key set to:", getKeyDisplayName(keyCode))
 
 end)
@@ -3344,13 +3353,6 @@ end)
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
-
-local function getKeyDisplayName(keyCode)
-	if keyCode == Enum.KeyCode.Semicolon then
-		return ";"
-	end
-	return keyCode.Name
-end
 
 local COMMAND_DISPLAY_NAMES = {
 	esp = "esp {distance}",
@@ -3708,7 +3710,11 @@ local function openMenu()
 
 	resetInputAndSuggestions()
 	hideHelpList()
-	sanitizeCommandInput()
+
+	-- clear any accidental key input
+	commandInput.Text = ""
+	commandInput.CursorPosition = -1
+
 	tween(mainBg, 0.05, {BackgroundTransparency = 0.45})
 
 	task.defer(function()
@@ -3863,8 +3869,8 @@ end)
 
 STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
-	-- MENU KEY OVERRIDE (prevents other binds using the same key)
-	if input.KeyCode == STATE.commandOpenKey and not commandInput:IsFocused() then
+	-- MENU KEY OVERRIDE (always allowed to toggle menu)
+	if input.KeyCode == STATE.commandOpenKey then
 		if not STATE.welcomeFinished then
 			return
 		end
