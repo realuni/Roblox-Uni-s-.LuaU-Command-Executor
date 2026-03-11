@@ -1,6 +1,7 @@
 
 --// Made by reaIuni @ Roblox
 --// Executable client-side command UI
+local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -1028,6 +1029,7 @@ local function getFreecamCharacterStartCFrame()
 end
 
 local function startFreecam(speed)
+
 	if STATE.menuOpen then
 		closeMenu()
 	end
@@ -1039,22 +1041,16 @@ local function startFreecam(speed)
 	speed = tonumber(speed) or 50
 
 	local camera = workspace.CurrentCamera
-	if not camera then
-		return
-	end
+	if not camera then return end
 
-	local startCFrame = getFreecamCharacterStartCFrame()
-	if not startCFrame then
-		return
-	end
+	local startCFrame = camera.CFrame
 
 	STATE.freecamEnabled = true
 	freezeCharacterForFreecam()
 
+	-- Save camera state
 	STATE.freecamOriginalCameraType = camera.CameraType
 	STATE.freecamOriginalCameraSubject = camera.CameraSubject
-	STATE.freecamOriginalCameraCFrame = camera.CFrame
-	STATE.freecamOriginalCameraFocus = camera.Focus
 	STATE.freecamOriginalMouseBehavior = UserInputService.MouseBehavior
 	STATE.freecamOriginalMouseIconEnabled = UserInputService.MouseIconEnabled
 
@@ -1064,39 +1060,28 @@ local function startFreecam(speed)
 
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = startCFrame
-	camera.Focus = startCFrame * CFrame.new(0,0,-512)
-
-	-- prevent dark exposure bug
-	camera:GetPropertyChangedSignal("CFrame"):Connect(function()
-		if STATE.freecamEnabled then
-			camera.Focus = camera.CFrame * CFrame.new(0,0,-512)
-		end
-	end)
-
 
 	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	UserInputService.MouseIconEnabled = false
 
 	STATE.freecamMouseConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-		if not STATE.freecamEnabled then
-			return
-		end
 
-		if gameProcessed then
-			return
-		end
+		if not STATE.freecamEnabled then return end
+		if gameProcessed then return end
 
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
+
 			STATE.freecamYaw -= input.Delta.X * STATE.freecamSensitivity
 			STATE.freecamPitch -= input.Delta.Y * STATE.freecamSensitivity
 			STATE.freecamPitch = math.clamp(STATE.freecamPitch, math.rad(-89), math.rad(89))
+
 		end
+
 	end)
 
-	STATE.freecamConnection = game:GetService("RunService").RenderStepped:Connect(function(dt)
-		if not STATE.freecamEnabled then
-			return
-		end
+	STATE.freecamConnection = RunService.RenderStepped:Connect(function(dt)
+
+		if not STATE.freecamEnabled then return end
 
 		local currentCamera = workspace.CurrentCamera
 		if not currentCamera then
@@ -1108,6 +1093,7 @@ local function startFreecam(speed)
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 
+		-- freeze player
 		if humanoid then
 			humanoid.WalkSpeed = 0
 			humanoid.JumpHeight = 0
@@ -1148,8 +1134,9 @@ local function startFreecam(speed)
 		end
 
 		currentCamera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
-		currentCamera.Focus = currentCamera.CFrame * CFrame.new(0,0,-512)
+
 	end)
+
 end
 
 local function cacheMovementDefaults()
