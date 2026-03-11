@@ -913,6 +913,7 @@ local populateHelpList
 local clearHelpEntries
 local hideHelpList
 local closeMenu
+local updateSuggestions
 
 local function getCubeHitboxSize(originalSize, multiplier)
 	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
@@ -2264,6 +2265,10 @@ end
 -- override global print
 _G.print = executorPrint
 
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- HELPERS 2
+--////////////////////////////////////////////////////
+
 local function getKeyDisplayName(keyCode)
 	if keyCode == Enum.KeyCode.Semicolon then
 		return ";"
@@ -3323,14 +3328,13 @@ addCommand("clickdelete", "Ghost command - Deletes the object you click when hol
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
-addCommand("cmdrbind {key}", "Changes the key used to open the command menu", function(key)
-
+addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cmdrbind {key}", function(key)
 	if not key or key == "" then
 		print("[FAIL] Usage: cmdrbind {key}")
 		return
 	end
 
-	local keyName = string.upper(key)
+	local keyName = string.upper(tostring(key))
 	local keyCode = Enum.KeyCode[keyName]
 
 	if not keyCode then
@@ -3340,14 +3344,20 @@ addCommand("cmdrbind {key}", "Changes the key used to open the command menu", fu
 
 	STATE.commandOpenKey = keyCode
 
-	title3.Text = "Press '" .. getKeyDisplayName(keyCode) .. "' to Open the Menu"
+	local displayName = getKeyDisplayName(keyCode)
+	title3.Text = "Press '" .. displayName .. "' to Open the Menu"
+	originalTexts[title3] = title3.Text
 
 	saveBinds()
 
 	helperBg.Visible = true
+	print("[SUCCESS] Command menu key set to:", displayName)
 
-	print("[SUCCESS] Command menu key set to:", getKeyDisplayName(keyCode))
-
+	if STATE.menuOpen then
+		commandInput.Text = ""
+		commandInput.CursorPosition = -1
+		updateSuggestions()
+	end
 end)
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -3388,12 +3398,13 @@ local COMMAND_DISPLAY_NAMES = {
 	playerinfo = "playerinfo {player}",
 	clickteleport = "clickteleport [ghost - bind required]",
 	clickdelete = "clickdelete [ghost - bind required]",
+	cmdrbind = "cmdrbind {key}",
 }
 
 local originalTexts = {
 	[title1] = title1.Text,
 	[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
-	[title3] = "Press ' " .. STATE.commandOpenKey.Name .. " ' to Open the Menu",
+	[title3] = "Press '" .. getKeyDisplayName(STATE.commandOpenKey) .. "' to Open the Menu",
 }
 
 title2.Text = originalTexts[title2]
@@ -3692,7 +3703,7 @@ local function rebuildSuggestions(matches)
 	end
 end
 
-local function updateSuggestions()
+updateSuggestions = function()
 	local text = getSearchText(commandInput.Text)
 	if text == "" then
 		resetSuggester()
@@ -3746,9 +3757,9 @@ local function toggleMenu()
 	end
 
 	task.defer(function()
-		if commandInput.Text:find(";") then
-			commandInput.Text = commandInput.Text:gsub(";", "")
-			commandInput.CursorPosition = #commandInput.Text + 1
+		if commandInput then
+			commandInput.Text = ""
+			commandInput.CursorPosition = -1
 			updateSuggestions()
 		end
 	end)
@@ -3868,9 +3879,10 @@ STATE.inputFocusLostConnection = commandInput.FocusLost:Connect(function(enterPr
 end)
 
 STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	local key = input.KeyCode
 
-	-- MENU KEY OVERRIDE (always allowed to toggle menu)
-	if input.KeyCode == STATE.commandOpenKey then
+	-- MENU KEY OVERRIDE (always uses current live bind)
+	if key == STATE.commandOpenKey then
 		if not STATE.welcomeFinished then
 			return
 		end
@@ -3878,23 +3890,26 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		toggleMenu()
 
 		task.defer(function()
+			commandInput.Text = ""
+			commandInput.CursorPosition = -1
 			sanitizeCommandInput()
 			updateSuggestions()
+
+			if STATE.menuOpen then
+				commandInput:CaptureFocus()
+			end
 		end)
 
 		return
 	end
 
-
 	if not gameProcessed and not commandInput:IsFocused() then
-
 		if STATE.clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickTeleportKey and UserInputService:IsKeyDown(STATE.clickTeleportKey) then
 				performClickTeleport()
 			end
 			return
 		end
-
 
 		if STATE.clickDeleteActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickDeleteKey and UserInputService:IsKeyDown(STATE.clickDeleteKey) then
@@ -3903,10 +3918,7 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
-
-		local key = input.KeyCode
 		local toggle = STATE.toggleBinds[key]
-
 		if toggle then
 			if toggle.state then
 				executeCommand(toggle.offCommand)
@@ -3918,7 +3930,6 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
-
 		local ghost = STATE.ghostBinds[key]
 		if ghost then
 			if ghost == "clickteleport" then
@@ -3929,7 +3940,6 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
-
 		local boundCommand = STATE.keybinds[key]
 		if boundCommand then
 			executeCommand(boundCommand)
@@ -3937,13 +3947,11 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		end
 	end
 
-
 	if not STATE.menuOpen then
 		return
 	end
 
-
-	if input.KeyCode == Enum.KeyCode.Tab and commandInput:IsFocused() then
+	if key == Enum.KeyCode.Tab and commandInput:IsFocused() then
 		local best = STATE.currentBestMatch
 		if best then
 			commandInput.Text = TAB_FILL_COMMANDS[best.Name] or best.Name
@@ -3954,11 +3962,9 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		return
 	end
 
-
 	if gameProcessed then
 		return
 	end
-
 end)
 
 STATE.inputEndedConnection = UserInputService.InputEnded:Connect(function(input)
