@@ -512,13 +512,6 @@ local function loadBinds()
 	table.clear(STATE.toggleBinds)
 	table.clear(STATE.ghostBinds)
 
-	if type(data.cmdrbind) == "string" then
-		local savedCmdrKey = Enum.KeyCode[data.cmdrbind]
-		if savedCmdrKey then
-			STATE.commandOpenKey = savedCmdrKey
-		end
-	end
-
 	if type(data.keybinds) == "table" then
 		for keyName, command in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
@@ -561,8 +554,7 @@ local function saveBinds()
 	local data = {
 		keybinds = {},
 		togglebinds = {},
-		ghostbinds = {},
-		cmdrbind = STATE.commandOpenKey.Name
+		ghostbinds = {}
 	}
 
 	for key, command in pairs(STATE.keybinds) do
@@ -2236,11 +2228,15 @@ local function createPrintHelper(text, shouldFade)
 		)
 	end
 
+	-- FORCE helper UI visible
 	helperBg.Visible = true
+	bg.Visible = true
+
 	activePrintHelpers[printHelperCounter] = entry
 
 	if shouldFade ~= false then
 		local helperId = printHelperCounter
+
 		task.spawn(function()
 			task.wait(5)
 
@@ -2266,30 +2262,70 @@ local function createPrintHelper(text, shouldFade)
 end
 
 local function executorPrint(...)
-	local args = { ... }
-	local text = ""
+	local args = {...}
 
+	local text = ""
 	for i = 1, #args do
 		text ..= (i > 1 and " " or "") .. tostring(args[i])
 	end
 
-	-- normal console output
+	-- console output
 	warn(text)
 
-	-- UI output
-	createPrintHelper(text)
+	-- ensure helper UI visible
+	bg.Visible = true
+	helperBg.Visible = true
+
+	-- create a fresh UI element instead of cloning template
+	local entry = Instance.new("Frame")
+	entry.BackgroundTransparency = 0.45
+	entry.BorderSizePixel = 0
+	entry.Size = UDim2.new(1,0,0,28)
+	entry.Parent = helperScrollingFrame
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.BorderSizePixel = 0
+	label.Size = UDim2.new(1,-16,1,0)
+	label.Position = UDim2.new(0,8,0,0)
+	label.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.TextSize = 14
+	label.RichText = true
+	label.TextColor3 = Color3.fromRGB(227,227,227)
+
+	label.Text = string.format(
+		"<font color=\"rgb(202,177,53)\">[EXEC]</font> %s",
+		text
+	)
+
+	label.Parent = entry
+
+	-- auto fade
+	task.spawn(function()
+		task.wait(5)
+
+		if entry and entry.Parent then
+			local tween = TweenService:Create(
+				entry,
+				TweenInfo.new(0.3),
+				{BackgroundTransparency = 1}
+			)
+
+			tween:Play()
+			tween.Completed:Wait()
+
+			if entry and entry.Parent then
+				entry:Destroy()
+			end
+		end
+	end)
 end
 	
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS 2
 --////////////////////////////////////////////////////
-
-local function getKeyDisplayName(keyCode)
-	if keyCode == Enum.KeyCode.Semicolon then
-		return ";"
-	end
-	return keyCode.Name
-end
 
 local function getTypedCharacterForKeyCode(keyCode)
 	local ok, keyString = pcall(function()
@@ -3363,47 +3399,6 @@ addCommand("clickdelete", "Ghost command - Deletes the object you click when hol
 	executorPrint("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
-addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cmdrbind {key}", function(key)
-	if not key or key == "" then
-		executorPrint("[FAIL] Usage: cmdrbind {key}")
-		return
-	end
-
-	local keyName = string.upper(tostring(key))
-	local keyCode = Enum.KeyCode[keyName]
-
-	if not keyCode then
-		executorPrint("[FAIL] Invalid key: " .. keyName)
-		return
-	end
-
-	STATE.commandOpenKey = keyCode
-
-	local displayName = getKeyDisplayName(keyCode)
-	title3.Text = "Press '" .. displayName .. "' to Open the Menu"
-	originalTexts[title3] = title3.Text
-
-	local saved = saveBinds()
-
-	if saved then
-		executorPrint("[SUCCESS] Rebinded the cmdr open function to " .. displayName)
-	else
-		executorPrint("[FAIL] Rebind worked in-session, but could not save cmdrbind to file")
-	end
-
-	if STATE.menuOpen then
-		commandInput.Text = ""
-		commandInput.CursorPosition = -1
-		updateSuggestions()
-
-		task.defer(function()
-			if STATE.menuOpen then
-				commandInput:CaptureFocus()
-			end
-		end)
-	end
-end)
-
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
@@ -3442,13 +3437,12 @@ local COMMAND_DISPLAY_NAMES = {
 	playerinfo = "playerinfo {player}",
 	clickteleport = "clickteleport [ghost - bind required]",
 	clickdelete = "clickdelete [ghost - bind required]",
-	cmdrbind = "cmdrbind {key}",
 }
 
 local originalTexts = {
 	[title1] = title1.Text,
 	[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
-	[title3] = "Press '" .. getKeyDisplayName(STATE.commandOpenKey) .. "' to Open the Menu",
+	[title3] = "Press ';' to Open the Menu",
 }
 
 title2.Text = originalTexts[title2]
@@ -3815,8 +3809,8 @@ local PERSISTENT_HELP_COMMANDS = {
 	teams = true,
 	binds = true,
 	waypoints = true,
-	cmdrbind = true,
 }
+
 local TAB_FILL_COMMANDS = {
 	esp = "esp ",
 	tpwalk = "tpwalk ",
@@ -3927,12 +3921,12 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 	local key = input.KeyCode
 
 	-- MENU KEY OVERRIDE (always uses current live bind)
-	if key == STATE.commandOpenKey then
+	if key == Enum.KeyCode.Semicolon then
 		if not STATE.welcomeFinished then
 			return
 		end
 
-		STATE.pendingMenuOpenCharacter = getTypedCharacterForKeyCode(STATE.commandOpenKey)
+		STATE.pendingMenuOpenCharacter = getTypedCharacterForKeyCode(Enum.KeyCode.Semicolon)
 
 		toggleMenu()
 
@@ -4513,8 +4507,7 @@ else
 	print("[INFO] No saved binds found or executor API unavailable")
 end
 
--- update welcome text after loading saved cmdrbind
-title3.Text = "Press '" .. getKeyDisplayName(STATE.commandOpenKey) .. "' to Open the Menu"
+title3.Text = "Press ';' to Open the Menu"
 originalTexts[title3] = title3.Text
 
 task.spawn(playWelcomeSequence)
