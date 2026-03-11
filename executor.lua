@@ -3327,7 +3327,7 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	local keyCode = Enum.KeyCode[keyName]
 
 	if not keyCode then
-		executorPrint("[FAIL] Invalid key:", keyName)
+		executorPrint("[FAIL] Invalid key: " .. keyName)
 		return
 	end
 
@@ -3337,18 +3337,27 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	title3.Text = "Press '" .. displayName .. "' to Open the Menu"
 	originalTexts[title3] = title3.Text
 
-	local ok = saveBinds()
-	if not ok then
+	local saveOk = saveBinds()
+	if not saveOk then
 		warn("Failed to save cmdrbind")
 	end
 
+	if not bg.Visible then
+		bg.Visible = true
+	end
 	helperBg.Visible = true
-	executorPrint("[SUCCESS] Command menu key set to:", displayName)
+
+	executorPrint("[SUCCESS] Command menu key set to: " .. displayName)
 
 	if STATE.menuOpen then
 		commandInput.Text = ""
 		commandInput.CursorPosition = -1
 		updateSuggestions()
+		task.defer(function()
+			if STATE.menuOpen then
+				commandInput:CaptureFocus()
+			end
+		end)
 	end
 end)
 
@@ -3762,8 +3771,8 @@ local PERSISTENT_HELP_COMMANDS = {
 	teams = true,
 	binds = true,
 	waypoints = true,
+	cmdrbind = true,
 }
-
 local TAB_FILL_COMMANDS = {
 	esp = "esp ",
 	tpwalk = "tpwalk ",
@@ -3882,7 +3891,7 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		toggleMenu()
 
 		if STATE.menuOpen then
-			-- prevent the key from appearing
+			commandInput:ReleaseFocus()
 			commandInput.Text = ""
 			commandInput.CursorPosition = -1
 
@@ -4445,6 +4454,7 @@ else
 	print("[INFO] No saved binds found or executor API unavailable")
 end
 
+-- update welcome text after loading saved cmdrbind
 title3.Text = "Press '" .. getKeyDisplayName(STATE.commandOpenKey) .. "' to Open the Menu"
 originalTexts[title3] = title3.Text
 
