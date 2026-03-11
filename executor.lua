@@ -908,6 +908,26 @@ local hideHelpList
 local closeMenu
 local openMenu
 
+local function restoreCharacterAfterFreecam()
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+	if not humanoid then return end
+
+	if STATE.defaultWalkSpeed then
+		humanoid.WalkSpeed = STATE.defaultWalkSpeed
+	end
+
+	if STATE.defaultJumpHeight then
+		humanoid.JumpHeight = STATE.defaultJumpHeight
+	end
+
+	humanoid.AutoRotate = true
+
+end
+
+
 local function getCubeHitboxSize(originalSize, multiplier)
 	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
 	return Vector3.new(largestAxis, largestAxis, largestAxis)
@@ -971,6 +991,11 @@ local function unfreezeCharacterFromFreecam()
 end
 
 local function stopFreecam()
+
+	if not STATE.freecamEnabled then
+		return
+	end
+
 	STATE.freecamEnabled = false
 
 	if STATE.freecamConnection then
@@ -987,21 +1012,20 @@ local function stopFreecam()
 	local character = LocalPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
-	if camera then
-		camera.CameraType = Enum.CameraType.Custom
+	if humanoid then
 		camera.CameraSubject = humanoid
 	end
 
-	UserInputService.MouseBehavior = STATE.freecamOriginalMouseBehavior or Enum.MouseBehavior.Default
-	UserInputService.MouseIconEnabled = STATE.freecamOriginalMouseIconEnabled == nil and true or STATE.freecamOriginalMouseIconEnabled
+	camera.CameraType = Enum.CameraType.Custom
 
-	unfreezeCharacterFromFreecam()
+	-- FIX mouse lock bug
+	task.defer(function()
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+	end)
 
-	STATE.freecamOriginalCameraType = nil
-	STATE.freecamOriginalCameraSubject = nil
-	STATE.freecamOriginalCameraCFrame = nil
-	STATE.freecamOriginalCameraFocus = nil
-	STATE.freecamPosition = nil
+	restoreCharacterAfterFreecam()
+
 end
 
 local function getFreecamCharacterStartCFrame()
@@ -1028,6 +1052,91 @@ local function getFreecamCharacterStartCFrame()
 	return CFrame.lookAt(startPosition, startPosition + lookVector)
 end
 
+local function cacheMovementDefaults()
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	if STATE.defaultWalkSpeed == nil then
+		STATE.defaultWalkSpeed = humanoid.WalkSpeed
+	end
+
+	if STATE.defaultJumpHeight == nil then
+		STATE.defaultJumpHeight = humanoid.JumpHeight
+	end
+end
+
+local function setWalkSpeed(amount)
+	amount = tonumber(amount)
+	if not amount then
+		print("Invalid walkspeed amount")
+		return
+	end
+
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	cacheMovementDefaults()
+	humanoid.WalkSpeed = amount
+end
+
+local function resetWalkSpeed()
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	cacheMovementDefaults()
+
+	if STATE.defaultWalkSpeed ~= nil then
+		humanoid.WalkSpeed = STATE.defaultWalkSpeed
+	end
+end
+
+local function setJumpHeight(amount)
+	amount = tonumber(amount)
+	if not amount then
+		print("Invalid jumpheight amount")
+		return
+	end
+
+	local character = LocalPlayer.Character
+	if not character then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	cacheMovementDefaults()
+	humanoid.UseJumpPower = false
+	humanoid.JumpHeight = amount
+end
+
+local function resetJumpHeight()
+	local character = LocalPlayer.Character
+	if not character then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	cacheMovementDefaults()
+	humanoid.UseJumpPower = false
+
+	if STATE.defaultJumpHeight ~= nil then
+		humanoid.JumpHeight = STATE.defaultJumpHeight
+	end
+end
+
 local function startFreecam(speed)
 
 	if STATE.menuOpen then
@@ -1046,6 +1155,8 @@ local function startFreecam(speed)
 	local startCFrame = camera.CFrame
 
 	STATE.freecamEnabled = true
+	cacheMovementDefaults()
+	freezeCharacterForFreecam()
 	freezeCharacterForFreecam()
 
 	-- Save camera state
@@ -1137,91 +1248,6 @@ local function startFreecam(speed)
 
 	end)
 
-end
-
-local function cacheMovementDefaults()
-	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	if STATE.defaultWalkSpeed == nil then
-		STATE.defaultWalkSpeed = humanoid.WalkSpeed
-	end
-
-	if STATE.defaultJumpHeight == nil then
-		STATE.defaultJumpHeight = humanoid.JumpHeight
-	end
-end
-
-local function setWalkSpeed(amount)
-	amount = tonumber(amount)
-	if not amount then
-		print("Invalid walkspeed amount")
-		return
-	end
-
-	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	cacheMovementDefaults()
-	humanoid.WalkSpeed = amount
-end
-
-local function resetWalkSpeed()
-	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	cacheMovementDefaults()
-
-	if STATE.defaultWalkSpeed ~= nil then
-		humanoid.WalkSpeed = STATE.defaultWalkSpeed
-	end
-end
-
-local function setJumpHeight(amount)
-	amount = tonumber(amount)
-	if not amount then
-		print("Invalid jumpheight amount")
-		return
-	end
-
-	local character = LocalPlayer.Character
-	if not character then
-		return
-	end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	cacheMovementDefaults()
-	humanoid.UseJumpPower = false
-	humanoid.JumpHeight = amount
-end
-
-local function resetJumpHeight()
-	local character = LocalPlayer.Character
-	if not character then
-		return
-	end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	cacheMovementDefaults()
-	humanoid.UseJumpPower = false
-
-	if STATE.defaultJumpHeight ~= nil then
-		humanoid.JumpHeight = STATE.defaultJumpHeight
-	end
 end
 
 local function stopFullbright()
