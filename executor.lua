@@ -19,7 +19,6 @@ commandExecutor.Name = "CommandExecutor"
 commandExecutor.IgnoreGuiInset = true
 commandExecutor.DisplayOrder = 999999
 commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-commandExecutor.Name = "CommandExecutor"
 commandExecutor.IgnoreGuiInset = true
 commandExecutor.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -377,6 +376,9 @@ exampleHelperLabel.RichText = true
 -- SETTINGS
 --////////////////////////////////////////////////////
 
+local hitboxTransparencyAll = nil
+local hitboxTransparencyPlayers = {}
+local hitboxTransparencyTeams = {}
 local hitboxTransparency = 0.9
 local highlightObjects = {}
 local highlightConnections = {}
@@ -1379,6 +1381,54 @@ local function refreshAllActiveHitboxes()
 
 end
 
+local function applyStoredHitboxTransparency(player)
+
+	if not player or player == LocalPlayer then
+		return
+	end
+
+	local character = player.Character
+	if not character then
+		return
+	end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return
+	end
+
+	local team = player.Team
+
+	local transparency = nil
+
+	-- PLAYER SPECIFIC
+	if hitboxTransparencyPlayers[player.UserId] ~= nil then
+		transparency = hitboxTransparencyPlayers[player.UserId]
+	end
+
+	-- TEAM
+	if team and hitboxTransparencyTeams[team.Name] ~= nil then
+		transparency = hitboxTransparencyTeams[team.Name]
+	end
+
+	-- GLOBAL
+	if transparency == nil and hitboxTransparencyAll ~= nil then
+		transparency = hitboxTransparencyAll
+	end
+
+	if transparency == nil then
+		root.Transparency = 0
+		return
+	end
+
+	root.Transparency = transparency
+
+	if player.Team and player.Team.TeamColor then
+		root.Color = player.Team.TeamColor.Color
+	end
+
+end
+
 local function stopHitboxEnforcement()
 	hitboxSystemEnabled = false
 
@@ -1394,7 +1444,7 @@ local function startHitboxEnforcement()
 	end
 	hitboxSystemEnabled = true
 	local RunService = game:GetService("RunService")
-	hitboxEnforcementConnection = RunService.RenderStepped:Connect(function()
+	hitboxEnforcementConnection = RunService.Heartbeat:Connect(function()
 		if not hitboxSystemEnabled then
 			return
 		end
@@ -1404,6 +1454,7 @@ local function startHitboxEnforcement()
 					restoreHitboxForPlayer(player)
 				else
 					refreshHitboxForPlayer(player)
+					applyStoredHitboxTransparency(player)
 				end
 			end
 		end
@@ -1427,6 +1478,7 @@ local function hookHitboxCharacter(player)
 		task.defer(function()
 			if character and character.Parent then
 				refreshHitboxForPlayer(player)
+				applyStoredHitboxTransparency(player)
 			end
 		end)
 	end)
@@ -1434,6 +1486,7 @@ local function hookHitboxCharacter(player)
 	if player.Character then
 		task.defer(function()
 			refreshHitboxForPlayer(player)
+			applyStoredHitboxTransparency(player)
 		end)
 	end
 end
@@ -1448,18 +1501,19 @@ local function ensureHitboxTracking()
 			hookHitboxCharacter(player)
 			player:GetPropertyChangedSignal("Team"):Connect(function()
 
-				if not hitboxSystemEnabled then
-					return
-				end
-
 				if hitboxIgnoreOwnTeam then
 					refreshAllActiveHitboxes()
 				end
+
+				applyStoredHitboxTransparency(player)
 
 			end)
 
 			task.defer(function()
 				refreshAllActiveHitboxes()
+			end)
+			task.defer(function()
+				applyStoredHitboxTransparency(player)
 			end)
 		end)
 		-- detect local team changes
@@ -1575,6 +1629,9 @@ local function updateHighlightVisibility()
 	for character, highlight in pairs(highlightObjects) do
 
 		if not character or not character.Parent then
+			if highlight then
+				highlight:Destroy()
+			end
 			highlightObjects[character] = nil
 			continue
 		end
@@ -2445,95 +2502,65 @@ local Commands = {
 				return
 			end
 
-			amount = math.clamp(amount, 0, 1)
-			hitboxTransparency = amount
+			amount = math.clamp(amount,0,1)
 
 			local Players = game:GetService("Players")
 			local Teams = game:GetService("Teams")
 
-			-- if no target specified → default to all
 			if #args == 1 then
 				args[2] = "all"
 			end
 
-			table.remove(args, 1)
-			local targetName = table.concat(args, " ")
+			table.remove(args,1)
+			local targetName = table.concat(args," ")
 			local lowerTarget = string.lower(targetName)
 
-			-- APPLY TO ALL
+			-- ALL
 			if lowerTarget == "all" then
 
-				for _, player in ipairs(Players:GetPlayers()) do
-					if player ~= LocalPlayer then
+				hitboxTransparencyAll = amount
+				table.clear(hitboxTransparencyPlayers)
+				table.clear(hitboxTransparencyTeams)
 
-						local character = player.Character
-						if not character then continue end
-
-						local root = character:FindFirstChild("HumanoidRootPart")
-						if not root then continue end
-
-						root.Transparency = hitboxTransparency
-
-						if player.Team and player.Team.TeamColor then
-							root.Color = player.Team.TeamColor.Color
-						else
-							root.Color = Color3.new(1,1,1)
-						end
-					end
+				for _,player in ipairs(Players:GetPlayers()) do
+					applyStoredHitboxTransparency(player)
 				end
 
-				print("Hitbox transparency set to", amount, "for all players")
+				print("Hitbox transparency set to",amount,"for all players")
 				return
 			end
 
-			-- APPLY TO TEAM
-			for _, team in ipairs(Teams:GetTeams()) do
+			-- TEAM
+			for _,team in ipairs(Teams:GetTeams()) do
 				if string.lower(team.Name) == lowerTarget then
 
-					for _, player in ipairs(Players:GetPlayers()) do
-						if player.Team == team and player ~= LocalPlayer then
+					hitboxTransparencyTeams[team.Name] = amount
 
-							local character = player.Character
-							if not character then continue end
-
-							local root = character:FindFirstChild("HumanoidRootPart")
-							if not root then continue end
-
-							root.Transparency = hitboxTransparency
-							root.Color = team.TeamColor.Color
+					for _,player in ipairs(Players:GetPlayers()) do
+						if player.Team == team then
+							applyStoredHitboxTransparency(player)
 						end
 					end
 
-					print("Hitbox transparency set to", amount, "for team:", team.Name)
+					print("Hitbox transparency set to",amount,"for team:",team.Name)
 					return
 				end
 			end
 
-			-- APPLY TO SINGLE PLAYER
+			-- PLAYER
 			local targetPlayer = findPlayerByName(targetName)
 
 			if not targetPlayer then
-				print("Player or team not found:", targetName)
+				print("Player or team not found:",targetName)
 				return
 			end
 
-			local character = targetPlayer.Character
-			if not character then return end
+			hitboxTransparencyPlayers[targetPlayer.UserId] = amount
+			applyStoredHitboxTransparency(targetPlayer)
 
-			local root = character:FindFirstChild("HumanoidRootPart")
-			if not root then return end
+			print("Hitbox transparency set to",amount,"for player:",targetPlayer.Name)
 
-			root.Transparency = hitboxTransparency
-
-			if targetPlayer.Team and targetPlayer.Team.TeamColor then
-				root.Color = targetPlayer.Team.TeamColor.Color
-			else
-				root.Color = Color3.new(1,1,1)
-			end
-
-			print("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
-
-		end,
+		end
 	},
 }
 
