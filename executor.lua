@@ -559,7 +559,7 @@ local function saveBinds()
 		keybinds = {},
 		togglebinds = {},
 		ghostbinds = {},
-		cmdrbind = STATE.commandOpenKey.Name
+			
 	}
 
 	for key, command in pairs(STATE.keybinds) do
@@ -3316,7 +3316,8 @@ addCommand("clickdelete", "Ghost command - Deletes the object you click when hol
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
-addCommand("cmdrbind", "Changes the key used to open the command menu", function(key)
+addCommand("cmdrbind {key}", "Changes the key used to open the command menu", function(key)
+
 	if not key or key == "" then
 		print("[FAIL] Usage: cmdrbind {key}")
 		return
@@ -3332,16 +3333,24 @@ addCommand("cmdrbind", "Changes the key used to open the command menu", function
 
 	STATE.commandOpenKey = keyCode
 
-	title3.Text = "Press '" .. keyName .. "' to Open the Menu"
+	title3.Text = "Press '" .. getKeyDisplayName(keyCode) .. "' to Open the Menu"
 
 	saveBinds()
 
-	print("[SUCCESS] Command menu key set to:", keyName)
+	print("[SUCCESS] Command menu key set to:", getKeyDisplayName(keyCode))
+
 end)
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
+
+local function getKeyDisplayName(keyCode)
+	if keyCode == Enum.KeyCode.Semicolon then
+		return ";"
+	end
+	return keyCode.Name
+end
 
 local COMMAND_DISPLAY_NAMES = {
 	esp = "esp {distance}",
@@ -3853,7 +3862,26 @@ STATE.inputFocusLostConnection = commandInput.FocusLost:Connect(function(enterPr
 end)
 
 STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+
+	-- MENU KEY OVERRIDE (prevents other binds using the same key)
+	if input.KeyCode == STATE.commandOpenKey and not commandInput:IsFocused() then
+		if not STATE.welcomeFinished then
+			return
+		end
+
+		toggleMenu()
+
+		task.defer(function()
+			sanitizeCommandInput()
+			updateSuggestions()
+		end)
+
+		return
+	end
+
+
 	if not gameProcessed and not commandInput:IsFocused() then
+
 		if STATE.clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickTeleportKey and UserInputService:IsKeyDown(STATE.clickTeleportKey) then
 				performClickTeleport()
@@ -3861,12 +3889,14 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
+
 		if STATE.clickDeleteActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickDeleteKey and UserInputService:IsKeyDown(STATE.clickDeleteKey) then
 				performClickDelete()
 			end
 			return
 		end
+
 
 		local key = input.KeyCode
 		local toggle = STATE.toggleBinds[key]
@@ -3882,6 +3912,7 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
+
 		local ghost = STATE.ghostBinds[key]
 		if ghost then
 			if ghost == "clickteleport" then
@@ -3892,6 +3923,7 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
+
 		local boundCommand = STATE.keybinds[key]
 		if boundCommand then
 			executeCommand(boundCommand)
@@ -3899,24 +3931,11 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		end
 	end
 
-	if input.KeyCode == STATE.commandOpenKey then
-		if not STATE.welcomeFinished then
-			return
-		end
-
-		toggleMenu()
-
-		task.defer(function()
-			sanitizeCommandInput()
-			updateSuggestions()
-		end)
-
-		return
-	end
 
 	if not STATE.menuOpen then
 		return
 	end
+
 
 	if input.KeyCode == Enum.KeyCode.Tab and commandInput:IsFocused() then
 		local best = STATE.currentBestMatch
@@ -3929,9 +3948,11 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		return
 	end
 
+
 	if gameProcessed then
 		return
 	end
+
 end)
 
 STATE.inputEndedConnection = UserInputService.InputEnded:Connect(function(input)
@@ -4418,7 +4439,7 @@ else
 	print("[INFO] No saved binds found or executor API unavailable")
 end
 
-title3.Text = "Press '" .. STATE.commandOpenKey.Name .. "' to Open the Menu"
+title3.Text = "Press '" .. getKeyDisplayName(STATE.commandOpenKey) .. "' to Open the Menu"
 originalTexts[title3] = title3.Text
 
 task.spawn(playWelcomeSequence)
