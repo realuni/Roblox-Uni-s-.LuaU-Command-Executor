@@ -1722,87 +1722,109 @@ local function startHitboxEnforcement()
 end
 
 local function hookHitboxCharacter(player)
+
 	if not player or player == LocalPlayer then
 		return
 	end
 
 	if hitboxCharacterConnections[player] then
 		hitboxCharacterConnections[player]:Disconnect()
-		hitboxCharacterConnections[player] = nil
 	end
 
 	hitboxCharacterConnections[player] = player.CharacterAdded:Connect(function(character)
+
 		originalHumanoidRootPartSizes[player] = nil
 		originalHumanoidRootPartCanCollide[player] = nil
 
+		task.wait(0.2)
+
+		local multiplier = getActiveHitboxMultiplierForPlayer(player)
+
+		if multiplier then
+			refreshHitboxForPlayer(player)
+			applyStoredHitboxTransparency(player)
+		end
+
+	end)
+
+	-- If character already exists
+	if player.Character then
+
 		task.defer(function()
-			if character and character.Parent then
+
+			local multiplier = getActiveHitboxMultiplierForPlayer(player)
+
+			if multiplier then
 				refreshHitboxForPlayer(player)
 				applyStoredHitboxTransparency(player)
 			end
-		end)
-	end)
 
-	if player.Character then
-		task.defer(function()
-			refreshHitboxForPlayer(player)
-			applyStoredHitboxTransparency(player)
 		end)
+
 	end
+
 end
 
 local function ensureHitboxTracking()
-	if not hitboxPlayerAddedConnection then
-		hitboxPlayerAddedConnection = Players.PlayerAdded:Connect(function(player)
-			if player == LocalPlayer then
-				return
-			end
 
-			hookHitboxCharacter(player)
-			player:GetPropertyChangedSignal("Team"):Connect(function()
-
-				if hitboxIgnoreOwnTeam then
-					refreshAllActiveHitboxes()
-				end
-
-				applyStoredHitboxTransparency(player)
-
-			end)
-
-			task.defer(function()
-				refreshAllActiveHitboxes()
-			end)
-			task.defer(function()
-				applyStoredHitboxTransparency(player)
-			end)
-		end)
-		-- detect local team changes
-		LocalPlayer:GetPropertyChangedSignal("Team"):Connect(function()
-
-			if not hitboxSystemEnabled then
-				return
-			end
-
-			if hitboxIgnoreOwnTeam then
-				refreshAllActiveHitboxes()
-			end
-
-		end)
+	if hitboxPlayerAddedConnection then
+		return
 	end
 
+	-- PLAYER JOIN
+	hitboxPlayerAddedConnection = Players.PlayerAdded:Connect(function(player)
+
+		if player == LocalPlayer then
+			return
+		end
+
+		hookHitboxCharacter(player)
+
+		-- Apply hitbox if global multiplier exists
+		task.defer(function()
+
+			local multiplier = getActiveHitboxMultiplierForPlayer(player)
+
+			if multiplier then
+				refreshHitboxForPlayer(player)
+				applyStoredHitboxTransparency(player)
+			end
+
+		end)
+
+	end)
+
+	-- PLAYER LEAVE
 	if not hitboxPlayerRemovingConnection then
 		hitboxPlayerRemovingConnection = Players.PlayerRemoving:Connect(function(player)
 			cleanupHitboxPlayer(player)
 		end)
 	end
 
-	for _, player in ipairs(Players:GetPlayers()) do
+	-- EXISTING PLAYERS
+	for _,player in ipairs(Players:GetPlayers()) do
+
 		if player ~= LocalPlayer then
+
 			hookHitboxCharacter(player)
+
+			task.defer(function()
+
+				local multiplier = getActiveHitboxMultiplierForPlayer(player)
+
+				if multiplier then
+					refreshHitboxForPlayer(player)
+					applyStoredHitboxTransparency(player)
+				end
+
+			end)
+
 		end
+
 	end
 
 	startHitboxEnforcement()
+
 end
 
 function applyHitboxToPlayer(player, multiplier)
