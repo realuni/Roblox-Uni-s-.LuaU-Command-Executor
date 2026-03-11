@@ -2040,7 +2040,13 @@ local Commands = {
 			highlightMaxDistance = distance
 			ensureHighlightTracking()
 
-			if string.lower(targetName) == "all" then
+			local Players = game:GetService("Players")
+			local Teams = game:GetService("Teams")
+
+			local lowerTarget = string.lower(targetName)
+
+			-- APPLY TO ALL
+			if lowerTarget == "all" then
 
 				highlightAllEnabled = true
 
@@ -2054,10 +2060,26 @@ local Commands = {
 				return
 			end
 
+			-- APPLY TO TEAM
+			for _, team in ipairs(Teams:GetTeams()) do
+				if string.lower(team.Name) == lowerTarget then
+
+					for _, player in ipairs(Players:GetPlayers()) do
+						if player.Team == team and player ~= LocalPlayer then
+							highlightPlayer(player)
+						end
+					end
+
+					print("Applied highlights to team:", team.Name)
+					return
+				end
+			end
+
+			-- APPLY TO SINGLE PLAYER
 			local targetPlayer = findPlayerByName(targetName)
 
 			if not targetPlayer then
-				print("Player not found:", targetName)
+				print("Player or team not found:", targetName)
 				return
 			end
 
@@ -2533,7 +2555,7 @@ local function getCommandDisplayNameForHelp(cmd)
 	elseif cmd.Name == "hitbox" then
 		return "hitbox {player/team} {multiplier}"
 	elseif cmd.Name == "highlight" then
-		return "highlight {player/all} {distance}"
+		return "highlight {player/team/all} {distance}"
 	elseif cmd.Name == "goto" then
 		return "goto {player}"
 	elseif cmd.Name == "view" then
@@ -2864,7 +2886,7 @@ end
 					displayName = "hitbox {player/team} {multiplier}"
 
 				elseif cmd.Name == "highlight" then
-					displayName = "highlight {player/all} {distance}"
+				displayName = "highlight {player/team/all} {distance}"
 
 				elseif cmd.Name == "esphighlight" then
 					displayName = "esphighlight {distance}"
@@ -2995,7 +3017,7 @@ end
 			suggesterCommandName.Text = "hitbox {player/team} {multiplier}"
 
 		elseif matches[1] and matches[1].Name == "highlight" then
-			suggesterCommandName.Text = "highlight {player/all} {distance}"
+		suggesterCommandName.Text = "highlight {player/team/all} {distance}"
 
 		elseif matches[1] and matches[1].Name == "esphighlight" then
 			suggesterCommandName.Text = "esphighlight {distance}"
