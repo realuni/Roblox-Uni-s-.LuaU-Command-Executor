@@ -145,7 +145,7 @@ do
 				commandInput.PlaceholderText = "Type 'help' to view all of the commands"
 				commandInput.Name = "CommandInput"
 				commandInput.Text = ""
-				commandInput.BackgroundTransparency = 0.999
+				commandInput.BackgroundTransparency = 1
 				commandInput.BorderSizePixel = 0
 				commandInput.CursorPosition = -1
 				commandInput.TextSize = 14
@@ -469,6 +469,10 @@ local keybinds = {}
 local waypoints = {}
 local WAYPOINT_FILE = "waypoints.json"
 local HttpService = game:GetService("HttpService")
+local waypointMarkers = {}
+local waypointBillboards = {}
+local waypointRenderConnection = nil
+local waypointShowEnabled = false
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- WAYPOINT STORAGE SYSTEM
@@ -539,11 +543,169 @@ local function loadWaypoints()
 	return true
 end
 
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- WAYPOINT VISUALIZATION SYSTEM
+--////////////////////////////////////////////////////
+
+local function createWaypointMarker(name, position)
+	-- Create cylinder part
+	local cylinder = Instance.new("Part")
+	cylinder.Name = "WaypointMarker_" .. name
+	cylinder.Size = Vector3.new(2048, 11, 6)
+	cylinder.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+	cylinder.Material = Enum.Material.Neon
+	cylinder.Color = Color3.fromRGB(212, 62, 62)
+	cylinder.Transparency = 0
+	cylinder.CanCollide = false
+	cylinder.Anchored = true
+	cylinder.Parent = workspace
+
+	-- Create billboard part for text
+	local billboardPart = Instance.new("Part")
+	billboardPart.Name = "WaypointBillboard_" .. name
+	billboardPart.Size = Vector3.new(1, 1, 1)
+	billboardPart.Position = position
+	billboardPart.Transparency = 1
+	billboardPart.CanCollide = false
+	billboardPart.Anchored = true
+	billboardPart.Parent = workspace
+
+	-- Create billboard gui
+	local billboardGui = Instance.new("BillboardGui")
+	billboardGui.Name = "WaypointBillboardGui"
+	billboardGui.Size = UDim2.new(0, 400, 0, 50)
+	billboardGui.StudsOffset = Vector3.new(0, 3, 0)
+	billboardGui.AlwaysOnTop = true
+	billboardGui.Parent = billboardPart
+
+	-- Create text label
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextColor3 = Color3.new(1, 1, 1)
+	textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+	textLabel.TextStrokeTransparency = 0
+	textLabel.Font = Enum.Font.GothamBold
+	textLabel.TextSize = 14
+	textLabel.RichText = true
+	textLabel.Text = name
+	textLabel.Parent = billboardGui
+
+	return cylinder, billboardPart
+end
+
+local function destroyWaypointMarkers()
+	-- Destroy all cylinder markers
+	for _, cylinder in pairs(waypointMarkers) do
+		if cylinder and cylinder.Parent then
+			cylinder:Destroy()
+		end
+	end
+	table.clear(waypointMarkers)
+
+	-- Destroy all billboard parts
+	for _, billboardPart in pairs(waypointBillboards) do
+		if billboardPart and billboardPart.Parent then
+			billboardPart:Destroy()
+		end
+	end
+	table.clear(waypointBillboards)
+end
+local function updateWaypointVisibility()
+	if not waypointShowEnabled then
+		return
+	end
+
+	local character = LocalPlayer.Character
+	if not character then
+		return
+	end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	-- Update cylinder transparency based on distance
+	for name, cylinder in pairs(waypointMarkers) do
+		if not cylinder or not cylinder.Parent then
+			continue
+		end
+
+		local distance = (cylinder.Position - root.Position).Magnitude
+
+		-- Calculate transparency based on distance
+		local transparency
+		if distance <= 50 then
+			transparency = 1
+		elseif distance >= 400 then
+			transparency = 0
+		else
+			-- Smooth transition from 0.95 at 50 studs to 0 at 400 studs
+			local progress = (distance - 50) / (400 - 50)
+			transparency = 0.95 * (1 - progress)
+		end
+
+		cylinder.Transparency = transparency
+	end
+
+	-- Update billboard text with distance
+	for name, billboardPart in pairs(waypointBillboards) do
+		if not billboardPart or not billboardPart.Parent then
+			continue
+		end
+
+		local billboardGui = billboardPart:FindFirstChild("WaypointBillboardGui")
+		if not billboardGui then
+			continue
+		end
+
+		local textLabel = billboardGui:FindFirstChildOfClass("TextLabel")
+		if not textLabel then
+			continue
+		end
+
+		local distance = (billboardPart.Position - root.Position).Magnitude
+
+		-- Format text with waypoint name in red and distance in white
+		local waypointColorHex = string.format("#%02x%02x%02x", 212, 62, 62)
+		textLabel.Text = string.format(
+			"<font color=\"%s\">%s</font> - <font color=\"rgb(255,255,255)\">%.1f</font>",
+			waypointColorHex,
+			name,
+			distance
+		)
+	end
+end
+local function startWaypointRendering()
+	if waypointRenderConnection then
+		return
+	end
+
+	local RunService = game:GetService("RunService")
+	waypointRenderConnection = RunService.RenderStepped:Connect(function()
+		if not waypointShowEnabled then
+			return
+		end
+
+		updateWaypointVisibility()
+	end)
+end
+
+local function stopWaypointRendering()
+	waypointShowEnabled = false
+
+	if waypointRenderConnection then
+		waypointRenderConnection:Disconnect()
+		waypointRenderConnection = nil
+	end
+end
+
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- SEARCH FUNCTIONS
 --////////////////////////////////////////////////////
 
+local populatePlayerInfo
 local populateHelpList
 local clearHelpEntries
 local hideHelpList
@@ -1634,6 +1796,10 @@ function applyHitboxToPlayer(player, multiplier)
 
 	hitboxPlayerMultipliers[player.UserId] = multiplier
 	refreshHitboxForPlayer(player)
+
+	-- FORCE TRANSPARENCY AFTER SIZE CHANGE
+	applyStoredHitboxTransparency(player)
+
 end
 
 local function resetAllHitboxes()
@@ -1837,6 +2003,8 @@ local function destroyExecutorSystem()
 	stopHitboxEnforcement()
 	resetAllHighlights()
 	resetAllHitboxes()
+	stopWaypointRendering()
+	destroyWaypointMarkers()
 
 	if hitboxPlayerRemovingConnection then
 		hitboxPlayerRemovingConnection:Disconnect()
@@ -1946,14 +2114,14 @@ local printHelperCounter = 0
 local function createPrintHelper(text, shouldFade)
 	printHelperCounter = printHelperCounter + 1
 	local helperId = printHelperCounter
-	
+
 	local entry = exampleHelperTemplate:Clone()
 	entry.Name = "PrintHelper_" .. helperId
 	entry.Visible = true
 	entry.Parent = helperScrollingFrame
 	entry.Size = UDim2.new(1, 0, 0, 28)
 	entry.BackgroundTransparency = 0.45
-	
+
 	local label = entry:FindFirstChild("CommandLine")
 	if label then
 		label.RichText = true
@@ -1962,17 +2130,17 @@ local function createPrintHelper(text, shouldFade)
 			text
 		)
 	end
-	
+
 	helperBg.Visible = true
-	
+
 	activePrintHelpers[helperId] = entry
-	
+
 	-- Only fade out if shouldFade is true (default behavior)
 	if shouldFade ~= false then
 		-- Fade out after 5 seconds
 		task.spawn(function()
 			task.wait(5)
-			
+
 			if activePrintHelpers[helperId] and activePrintHelpers[helperId].Parent then
 				-- Quickly fade out
 				local fadeTween = TweenService:Create(activePrintHelpers[helperId], 
@@ -1980,21 +2148,21 @@ local function createPrintHelper(text, shouldFade)
 					{BackgroundTransparency = 1}
 				)
 				fadeTween:Play()
-				
+
 				-- Wait for fade to complete
 				fadeTween.Completed:Wait()
-				
+
 				-- Destroy the frame so it's completely removed
 				if activePrintHelpers[helperId] and activePrintHelpers[helperId].Parent then
 					activePrintHelpers[helperId]:Destroy()
 				end
 			end
-			
+
 			-- Clean up tracking
 			activePrintHelpers[helperId] = nil
 		end)
 	end
-	
+
 	return helperId
 end
 
@@ -2009,10 +2177,10 @@ _G.print = function(...)
 		end
 		text = text .. tostring(arg)
 	end
-	
+
 	-- Call original print for console output
 	originalPrint(...)
-	
+
 	-- Create visual print helper
 	createPrintHelper(text)
 end
@@ -2112,7 +2280,7 @@ local Commands = {
 				rootPart.Position + (flatForward * distance),
 				rootPart.Position + (flatForward * distance) + flatForward
 			)
-			
+
 			print("[SUCCESS] Teleported", distance, "studs forward")
 		end,
 	},
@@ -2361,7 +2529,7 @@ local Commands = {
 				print("[FAIL] Your character not found for goto")
 				return
 			end
-			
+
 			if not targetCharacter then
 				print("[FAIL] Target character not found:", target.Name)
 				return
@@ -2374,7 +2542,7 @@ local Commands = {
 				print("[FAIL] Your HumanoidRootPart not found")
 				return
 			end
-			
+
 			if not targetRoot then
 				print("[FAIL] Target HumanoidRootPart not found")
 				return
@@ -2469,7 +2637,7 @@ local Commands = {
 				end
 
 			end)
-			
+
 			print("[SUCCESS] Noclip enabled")
 
 		end,
@@ -2499,7 +2667,7 @@ local Commands = {
 					part.CanCollide = true
 				end
 			end
-			
+
 			print("[SUCCESS] Noclip disabled")
 
 		end,
@@ -2534,13 +2702,13 @@ local Commands = {
 				print("[FAIL] Missing FOV amount")
 				return
 			end
-			
+
 			local numAmount = tonumber(amount)
 			if not numAmount then
 				print("[FAIL] Invalid FOV value:", amount)
 				return
 			end
-			
+
 			print("[SUCCESS] FOV set to:", numAmount)
 			startCustomFov(amount)
 		end,
@@ -2565,7 +2733,7 @@ local Commands = {
 				print("[FAIL] Fly is already enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Fly enabled")
 			startFly(speed)
 		end,
@@ -2578,7 +2746,7 @@ local Commands = {
 				print("[FAIL] Fly is not currently enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Fly disabled")
 			stopFly()
 		end,
@@ -2591,7 +2759,7 @@ local Commands = {
 				print("[FAIL] Tracers are already enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Tracers enabled")
 			startTracers(distance)
 		end,
@@ -2604,7 +2772,7 @@ local Commands = {
 				print("[FAIL] Tracers are not currently enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Tracers disabled")
 			stopTracers()
 		end,
@@ -2617,7 +2785,7 @@ local Commands = {
 				print("[FAIL] Freecam is already enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Freecam enabled")
 			startFreecam(speed)
 		end,
@@ -2630,7 +2798,7 @@ local Commands = {
 				print("[FAIL] Freecam is not currently enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Freecam disabled")
 			stopFreecam()
 		end,
@@ -2643,13 +2811,13 @@ local Commands = {
 				print("[FAIL] Missing walkspeed amount")
 				return
 			end
-			
+
 			local numAmount = tonumber(amount)
 			if not numAmount then
 				print("[FAIL] Invalid walkspeed value:", amount)
 				return
 			end
-			
+
 			print("[SUCCESS] Walkspeed set to:", numAmount)
 			setWalkSpeed(amount)
 		end,
@@ -2670,13 +2838,13 @@ local Commands = {
 				print("[FAIL] Missing jumpheight amount")
 				return
 			end
-			
+
 			local numAmount = tonumber(amount)
 			if not numAmount then
 				print("[FAIL] Invalid jumpheight value:", amount)
 				return
 			end
-			
+
 			print("[SUCCESS] Jumpheight set to:", numAmount)
 			setJumpHeight(amount)
 		end,
@@ -2697,7 +2865,7 @@ local Commands = {
 				print("[FAIL] Fullbright is already enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Fullbright enabled")
 			startFullbright()
 		end,
@@ -2710,7 +2878,7 @@ local Commands = {
 				print("[FAIL] Fullbright is not currently enabled")
 				return
 			end
-			
+
 			print("[SUCCESS] Fullbright disabled")
 			stopFullbright()
 		end,
@@ -3277,6 +3445,67 @@ local Commands = {
 			end
 		end,
 	},
+	{
+		Name = "showwaypoints",
+		Description = "Shows 3D markers for all waypoints with distance-based transparency",
+		Execute = function()
+			if waypointShowEnabled then
+				print("[FAIL] Waypoints are already shown")
+				return
+			end
+
+			-- Destroy existing markers first
+			destroyWaypointMarkers()
+
+			-- Create new markers for all waypoints
+			for name, position in pairs(waypoints) do
+				local cylinder, billboardPart = createWaypointMarker(name, position)
+				waypointMarkers[name] = cylinder
+				waypointBillboards[name] = billboardPart
+			end
+
+			waypointShowEnabled = true
+			startWaypointRendering()
+
+			print("[SUCCESS] Showing waypoint markers for", #waypoints, "waypoints")
+		end,
+	},
+	{
+		Name = "hidewaypoints",
+		Description = "Hides all waypoint markers",
+		Execute = function()
+			if not waypointShowEnabled then
+				print("[FAIL] Waypoints are already hidden")
+				return
+			end
+
+			stopWaypointRendering()
+			destroyWaypointMarkers()
+
+			print("[SUCCESS] Hid all waypoint markers")
+		end,
+	},
+	{
+		Name = "playerinfo",
+		Description = "Displays detailed information about the specified player",
+		Execute = function(username)
+
+			if not username or username == "" then
+				print("[FAIL] Missing username for playerinfo command")
+				return
+			end
+
+			local target = findPlayerByName(username)
+
+			if not target then
+				print("[FAIL] Player not found:", username)
+				return
+			end
+
+			populatePlayerInfo(target)
+
+		end,
+	},
 }
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -3378,6 +3607,77 @@ populateHelpList = function()
 	end
 
 	helperBg.Visible = true
+end
+
+populatePlayerInfo = function(targetPlayer)
+
+	clearHelpEntries()
+	exampleHelperTemplate.Visible = false
+
+	local function createLine(label, value)
+
+		local entry = exampleHelperTemplate:Clone()
+		entry.Visible = true
+		entry.Parent = helperScrollingFrame
+		entry.Size = UDim2.new(1,0,0,28)
+
+		local text = entry:FindFirstChild("CommandLine")
+
+		if text then
+			text.RichText = true
+			text.Text = string.format(
+				"<font color=\"rgb(202,177,53)\">%s :</font> <font color=\"rgb(227,227,227)\">%s</font>",
+				label,
+				tostring(value)
+			)
+		end
+
+	end
+
+	-- BASIC INFO
+	createLine("Display Name", targetPlayer.DisplayName)
+	createLine("Username", targetPlayer.Name)
+	createLine("UserId", targetPlayer.UserId)
+
+	-- ACCOUNT AGE → JOIN DATE
+	local accountAgeDays = targetPlayer.AccountAge
+	local joinDate = os.date("%Y-%m-%d", os.time() - (accountAgeDays * 86400))
+	createLine("Join Date", joinDate)
+
+	-- TEAM
+	if targetPlayer.Team then
+		createLine("Team", targetPlayer.Team.Name)
+	else
+		createLine("Team", "None")
+	end
+
+	-- CHARACTER DATA
+	local character = targetPlayer.Character
+	local localCharacter = LocalPlayer.Character
+
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local root = character:FindFirstChild("HumanoidRootPart")
+
+		if humanoid then
+			createLine("Health", math.floor(humanoid.Health))
+		else
+			createLine("Health", "Unknown")
+		end
+
+		if root and localCharacter then
+			local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+
+			if localRoot then
+				local distance = (root.Position - localRoot.Position).Magnitude
+				createLine("Distance", string.format("%.1f studs", distance))
+			end
+		end
+	end
+
+	helperBg.Visible = true
+	print("[SUCCESS] Player info displayed", false)
+
 end
 
 populateTeamsList = function()
@@ -3748,6 +4048,9 @@ local function rebuildSuggestions(matches)
 
 			elseif cmd.Name == "gotowaypoint" then
 				displayName = "gotowaypoint {name}"
+
+			elseif cmd.Name == "playerinfo" then
+				displayName = "playerinfo {player}"
 			end
 
 			entryLabel.Text = displayName
@@ -3885,6 +4188,9 @@ local function updateSuggestions()
 
 	elseif matches[1] and matches[1].Name == "gotowaypoint" then
 		suggesterCommandName.Text = "gotowaypoint {name}"
+
+	elseif matches[1] and matches[1].Name == "playerinfo" then
+		suggesterCommandName.Text = "playerinfo {player}"
 	end
 end
 
@@ -4115,6 +4421,8 @@ inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameP
 				fillText = "maxzoom "
 			elseif currentBestMatch.Name == "esphighlight" then
 				fillText = "esphighlight "
+			elseif currentBestMatch.Name == "playerinfo" then
+				fillText = "playerinfo "
 			end
 
 			commandInput.Text = fillText
@@ -4455,6 +4763,61 @@ function stopNametagSystem()
 
 end
 
+--////////////////////////////////////////////////////
+-- GLOBAL PLAYER TRACKING SYSTEM
+--////////////////////////////////////////////////////
+
+local function onCharacterSpawn(player, character)
+
+	task.wait()
+
+	-- HITBOX SYSTEM
+	if hitboxSystemEnabled then
+		refreshHitboxForPlayer(player)
+		applyStoredHitboxTransparency(player)
+	end
+
+	-- HIGHLIGHT SYSTEM
+	if highlightAllEnabled then
+		applyHighlightToCharacter(player, character)
+	end
+
+end
+
+
+local function trackPlayer(player)
+
+	if player == LocalPlayer then
+		return
+	end
+
+	-- Character spawn tracking
+	player.CharacterAdded:Connect(function(character)
+		onCharacterSpawn(player, character)
+	end)
+
+	-- If character already exists
+	if player.Character then
+		onCharacterSpawn(player, player.Character)
+	end
+
+end
+
+
+local function startGlobalPlayerTracking()
+
+	-- Track already existing players
+	for _, player in ipairs(Players:GetPlayers()) do
+		trackPlayer(player)
+	end
+
+	-- Track new players
+	Players.PlayerAdded:Connect(function(player)
+		trackPlayer(player)
+	end)
+
+end
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- STARTUP
 --////////////////////////////////////////////////////
@@ -4485,6 +4848,8 @@ resetSuggester()
 bg.Visible = false
 helperBg.Visible = false
 exampleHelperTemplate.Visible = false
+
+startGlobalPlayerTracking()
 
 -- Load saved waypoints on startup
 if loadWaypoints() then
