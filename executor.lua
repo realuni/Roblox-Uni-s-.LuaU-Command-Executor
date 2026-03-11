@@ -9,7 +9,6 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local BINDS_FILE = "executor_binds.json"
 local WAYPOINT_FILE = "executor_waypoints.json"
-local print = print
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- UI CREATION
@@ -469,6 +468,7 @@ local STATE = {
 	globalCharacterConnections = {},
 	inputEndedConnection = nil,
 	nametagRenderDistance = math.huge,
+	commandOpenKey = Enum.KeyCode.Semicolon,
 }
 
 local CONFIG = {
@@ -508,6 +508,13 @@ local function loadBinds()
 	local keybinds = STATE.keybinds
 	local toggleBinds = STATE.toggleBinds
 	local ghostBinds = STATE.ghostBinds
+
+	if data.cmdrbind then
+		local keyCode = Enum.KeyCode[data.cmdrbind]
+		if keyCode then
+			STATE.commandOpenKey = keyCode
+		end
+	end
 
 	if data.keybinds then
 		for keyName, command in pairs(data.keybinds) do
@@ -551,7 +558,8 @@ local function saveBinds()
 	local data = {
 		keybinds = {},
 		togglebinds = {},
-		ghostbinds = {}
+		ghostbinds = {},
+		cmdrbind = STATE.commandOpenKey.Name
 	}
 
 	for key, command in pairs(STATE.keybinds) do
@@ -2034,7 +2042,7 @@ end
 
 local function sanitizeCommandInput()
 	local text = commandInput.Text
-	local cleaned = text:gsub(";", ""):gsub("\t", "")
+	local cleaned = text:gsub("\t", "")
 
 	if cleaned ~= text then
 		local oldCursor = commandInput.CursorPosition
@@ -3017,7 +3025,7 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Binds list displayed", false)
+	print("[SUCCESS] Binds list displayed")
 end)
 
 addCommand("clearbinds", "Clears all of your previously created binds", function()
@@ -3209,7 +3217,7 @@ addCommand("waypoints", "Shows all created waypoints", function()
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Waypoints list displayed", false)
+	print("[SUCCESS] Waypoints list displayed")
 end)
 
 addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(...)
@@ -3308,6 +3316,29 @@ addCommand("clickdelete", "Ghost command - Deletes the object you click when hol
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
+addCommand("cmdrbind", "Changes the key used to open the command menu", function(key)
+	if not key or key == "" then
+		print("[FAIL] Usage: cmdrbind {key}")
+		return
+	end
+
+	local keyName = string.upper(key)
+	local keyCode = Enum.KeyCode[keyName]
+
+	if not keyCode then
+		print("[FAIL] Invalid key:", keyName)
+		return
+	end
+
+	STATE.commandOpenKey = keyCode
+
+	title3.Text = "Press '" .. keyName .. "' to Open the Menu"
+
+	saveBinds()
+
+	print("[SUCCESS] Command menu key set to:", keyName)
+end)
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
@@ -3351,7 +3382,7 @@ local COMMAND_DISPLAY_NAMES = {
 local originalTexts = {
 	[title1] = title1.Text,
 	[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
-	[title3] = title3.Text,
+	[title3] = "Press ' " .. STATE.commandOpenKey.Name .. " ' to Open the Menu",
 }
 
 title2.Text = originalTexts[title2]
@@ -3439,7 +3470,7 @@ populatePlayerInfo = function(targetPlayer)
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Player info displayed", false)
+	print("[SUCCESS] Player info displayed")
 end
 
 populateTeamsList = function()
@@ -3868,7 +3899,7 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		end
 	end
 
-	if input.KeyCode == Enum.KeyCode.Semicolon then
+	if input.KeyCode == STATE.commandOpenKey then
 		if not STATE.welcomeFinished then
 			return
 		end
@@ -4386,6 +4417,9 @@ if loadBinds() then
 else
 	print("[INFO] No saved binds found or executor API unavailable")
 end
+
+title3.Text = "Press '" .. STATE.commandOpenKey.Name .. "' to Open the Menu"
+originalTexts[title3] = title3.Text
 
 task.spawn(playWelcomeSequence)
 
