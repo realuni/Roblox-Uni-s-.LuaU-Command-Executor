@@ -2240,12 +2240,7 @@ local function createPrintHelper(text, shouldFade)
 			activePrintHelpers[helperId] = nil
 		end)
 	end
-
-	return printHelperCounter
 end
-
--- store the original print safely
-local originalPrint = _G.print
 
 local function executorPrint(...)
 	local args = { ... }
@@ -2255,16 +2250,13 @@ local function executorPrint(...)
 		text ..= (i > 1 and " " or "") .. tostring(args[i])
 	end
 
-	-- print to console
-	originalPrint(...)
+	-- normal console output
+	warn(text)
 
-	-- print to executor UI
+	-- UI output
 	createPrintHelper(text)
 end
-
--- override global print
-_G.print = executorPrint
-
+	
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS 2
 --////////////////////////////////////////////////////
@@ -2296,46 +2288,46 @@ addCommand("esp", "Displays a customizable nametag above every player displaying
 	else
 		distance = tonumber(distance)
 		if not distance then
-			print("[FAIL] Invalid distance value for esp command")
+			executorPrint("[FAIL] Invalid distance value for esp command")
 			return
 		end
 	end
 
-	print("[SUCCESS] Nametag render distance set to:", distance == math.huge and "infinite" or distance, "studs")
+	executorPrint("[SUCCESS] Nametag render distance set to:", distance == math.huge and "infinite" or distance, "studs")
 	startNametagSystem(distance)
 end)
 
 addCommand("unesp", "Turns off the customizable nametags above every player displaying their username, health and distance from you in studs.", function()
-	print("[SUCCESS] Nametag system disabled")
+	executorPrint("[SUCCESS] Nametag system disabled")
 	stopNametagSystem()
 end)
 
 addCommand("tpwalk", "Makes your character walk faster without speeding up any animations, usage: 'tpwalk 0.25' for a slight boost", function(multiplier)
 	multiplier = tonumber(multiplier)
 	if not multiplier then
-		print("[FAIL] Invalid tpwalk multiplier value")
+		executorPrint("[FAIL] Invalid tpwalk multiplier value")
 		return
 	end
 
-	print("[SUCCESS] Tpwalk enabled with multiplier:", multiplier)
+	executorPrint("[SUCCESS] Tpwalk enabled with multiplier:", multiplier)
 	startTpWalk(multiplier)
 end)
 
 addCommand("untpwalk", "Removes any previously granted 'tpwalk' functions to the players character if there were any", function()
-	print("[SUCCESS] Tpwalk disabled")
+	executorPrint("[SUCCESS] Tpwalk disabled")
 	stopTpWalk()
 end)
 
 addCommand("blink", "Teleports you x studs towards the direction your character is looking at.", function(distance)
 	distance = tonumber(distance)
 	if not distance then
-		print("[FAIL] Invalid blink distance value")
+		executorPrint("[FAIL] Invalid blink distance value")
 		return
 	end
 
 	local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then
-		print("[FAIL] HumanoidRootPart not found for blink")
+		executorPrint("[FAIL] HumanoidRootPart not found for blink")
 		return
 	end
 
@@ -2343,33 +2335,33 @@ addCommand("blink", "Teleports you x studs towards the direction your character 
 	local flatForward = Vector3.new(lookVector.X, 0, lookVector.Z)
 
 	if flatForward.Magnitude <= 0 then
-		print("[FAIL] Invalid look direction for blink")
+		executorPrint("[FAIL] Invalid look direction for blink")
 		return
 	end
 
 	flatForward = flatForward.Unit
 	rootPart.CFrame = CFrame.new(rootPart.Position + flatForward * distance, rootPart.Position + flatForward * (distance + 1))
 
-	print("[SUCCESS] Teleported", distance, "studs forward")
+	executorPrint("[SUCCESS] Teleported", distance, "studs forward")
 end)
 
 addCommand("hitbox", "Multiplies the hitbox area of the selected player or team, usage: 'hitbox username 2' or 'hitbox Engineering Department 2'", function(...)
 	local args = {...}
 	if #args < 2 then
-		print("[FAIL] Usage: hitbox {player/team} {multiplier}")
+		executorPrint("[FAIL] Usage: hitbox {player/team} {multiplier}")
 		return
 	end
 
 	local multiplier = tonumber(args[#args])
 	if not multiplier then
-		print("[FAIL] Invalid hitbox multiplier value")
+		executorPrint("[FAIL] Invalid hitbox multiplier value")
 		return
 	end
 
 	args[#args] = nil
 	local targetName = table.concat(args, " ")
 	if targetName == "" then
-		print("[FAIL] Missing target name or team")
+		executorPrint("[FAIL] Missing target name or team")
 		return
 	end
 
@@ -2387,7 +2379,7 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 
 			STATE.hitboxSystemEnabled = true
 			refreshAllActiveHitboxes()
-			print("[SUCCESS] Applied hitbox multiplier", multiplier, "to team:", team.Name)
+			executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to team:", team.Name)
 			return
 		end
 	end
@@ -2403,39 +2395,39 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 
 		STATE.hitboxSystemEnabled = true
 		refreshAllActiveHitboxes()
-		print("[SUCCESS] Applied hitbox multiplier", multiplier, "to all players")
+		executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to all players")
 		return
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		print("[FAIL] Player or team not found:", targetName)
+		executorPrint("[FAIL] Player or team not found:", targetName)
 		return
 	end
 
 	STATE.hitboxSystemEnabled = true
 	applyHitboxToPlayer(targetPlayer, multiplier)
-	print("[SUCCESS] Applied hitbox multiplier", multiplier, "to player:", targetPlayer.Name)
+	executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to player:", targetPlayer.Name)
 end)
 
 addCommand("resethitboxes", "Removes any previously expanded hitboxes to player characters if there were any", function()
 	resetAllHitboxes()
-	print("[SUCCESS] Reset all expanded hitboxes")
+	executorPrint("[SUCCESS] Reset all expanded hitboxes")
 end)
 
 addCommand("respawn", "Resets your roblox character - Sets your humanoid health to 0", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		print("[FAIL] Humanoid not found for respawn")
+		executorPrint("[FAIL] Humanoid not found for respawn")
 		return
 	end
 
 	humanoid.Health = 0
-	print("[SUCCESS] Character respawned")
+	executorPrint("[SUCCESS] Character respawned")
 end)
 
 addCommand("rejoin", "Rejoins the same server and re-executes the script if supported by your executor", function()
-	print("[SUCCESS] Rejoining server...")
+	executorPrint("[SUCCESS] Rejoining server...")
 
 	local TeleportService = game:GetService("TeleportService")
 
@@ -2452,7 +2444,7 @@ end)
 addCommand("highlight", "Highlights the specified players making them visible through walls, and displaying their animations in real time", function(targetName, distance)
 	targetName = tostring(targetName or "")
 	if targetName == "" then
-		print("[FAIL] Missing target name for highlight")
+		executorPrint("[FAIL] Missing target name for highlight")
 		return
 	end
 
@@ -2461,7 +2453,7 @@ addCommand("highlight", "Highlights the specified players making them visible th
 	else
 		distance = tonumber(distance)
 		if not distance then
-			print("[FAIL] Invalid highlight distance value")
+			executorPrint("[FAIL] Invalid highlight distance value")
 			return
 		end
 	end
@@ -2480,7 +2472,7 @@ addCommand("highlight", "Highlights the specified players making them visible th
 			end
 		end
 
-		print("[SUCCESS] Applied highlights to all players with distance:", distance == math.huge and "infinite" or distance)
+		executorPrint("[SUCCESS] Applied highlights to all players with distance:", distance == math.huge and "infinite" or distance)
 		return
 	end
 
@@ -2492,40 +2484,40 @@ addCommand("highlight", "Highlights the specified players making them visible th
 				end
 			end
 
-			print("[SUCCESS] Applied highlights to team:", team.Name)
+			executorPrint("[SUCCESS] Applied highlights to team:", team.Name)
 			return
 		end
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		print("[FAIL] Player or team not found:", targetName)
+		executorPrint("[FAIL] Player or team not found:", targetName)
 		return
 	end
 
 	highlightPlayer(targetPlayer)
-	print("[SUCCESS] Applied highlight to player:", targetPlayer.Name)
+	executorPrint("[SUCCESS] Applied highlight to player:", targetPlayer.Name)
 end)
 
 addCommand("unhighlight", "Removes any previously added highlight effects to every player if there were any", function()
 	resetAllHighlights()
-	print("[SUCCESS] Removed all highlights")
+	executorPrint("[SUCCESS] Removed all highlights")
 end)
 
 addCommand("help", "Shows all of the executable modules and briefly explains how they all work", function()
-	print("[SUCCESS] Help list displayed")
+	executorPrint("[SUCCESS] Help list displayed")
 	populateHelpList()
 end)
 
 addCommand("goto", "Teleports your player to the specified player, usage: 'goto username'", function(username)
 	if not username or username == "" then
-		print("[FAIL] Missing username for goto command")
+		executorPrint("[FAIL] Missing username for goto command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		print("[FAIL] Player not found:", username)
+		executorPrint("[FAIL] Player not found:", username)
 		return
 	end
 
@@ -2533,46 +2525,46 @@ addCommand("goto", "Teleports your player to the specified player, usage: 'goto 
 	local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
 
 	if not root then
-		print("[FAIL] Your HumanoidRootPart not found")
+		executorPrint("[FAIL] Your HumanoidRootPart not found")
 		return
 	end
 
 	if not targetRoot then
-		print("[FAIL] Target HumanoidRootPart not found")
+		executorPrint("[FAIL] Target HumanoidRootPart not found")
 		return
 	end
 
 	root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
-	print("[SUCCESS] Teleported to player:", target.Name)
+	executorPrint("[SUCCESS] Teleported to player:", target.Name)
 end)
 
 addCommand("view", "Teleports your player camera to the specified player, usage: 'view username'", function(username)
 	if not username or username == "" then
-		print("[FAIL] Missing username for view command")
+		executorPrint("[FAIL] Missing username for view command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		print("[FAIL] Player not found:", username)
+		executorPrint("[FAIL] Player not found:", username)
 		return
 	end
 
 	local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		print("[FAIL] Target humanoid not found")
+		executorPrint("[FAIL] Target humanoid not found")
 		return
 	end
 
 	local camera = workspace.CurrentCamera
 	if not camera then
-		print("[FAIL] Camera not found")
+		executorPrint("[FAIL] Camera not found")
 		return
 	end
 
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = target
-	print("[SUCCESS] Now viewing player:", target.Name)
+	executorPrint("[SUCCESS] Now viewing player:", target.Name)
 end)
 
 addCommand("unview", "Teleports your player camera back to you, if you are spectating someone", function()
@@ -2580,23 +2572,23 @@ addCommand("unview", "Teleports your player camera back to you, if you are spect
 	local camera = workspace.CurrentCamera
 
 	if not humanoid then
-		print("[FAIL] Your humanoid not found")
+		executorPrint("[FAIL] Your humanoid not found")
 		return
 	end
 
 	if not camera then
-		print("[FAIL] Camera not found")
+		executorPrint("[FAIL] Camera not found")
 		return
 	end
 
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = nil
-	print("[SUCCESS] Camera returned to your character")
+	executorPrint("[SUCCESS] Camera returned to your character")
 end)
 
 addCommand("noclip", "Disables all collisions for your local player essentially letting you walk through walls", function()
 	if STATE.noclipEnabled then
-		print("[FAIL] Noclip is already enabled")
+		executorPrint("[FAIL] Noclip is already enabled")
 		return
 	end
 
@@ -2614,12 +2606,12 @@ addCommand("noclip", "Disables all collisions for your local player essentially 
 		end
 	end)
 
-	print("[SUCCESS] Noclip enabled")
+	executorPrint("[SUCCESS] Noclip enabled")
 end)
 
 addCommand("clip", "Disables the noclip function", function()
 	if not STATE.noclipEnabled then
-		print("[FAIL] Noclip is not currently enabled")
+		executorPrint("[FAIL] Noclip is not currently enabled")
 		return
 	end
 
@@ -2639,38 +2631,38 @@ addCommand("clip", "Disables the noclip function", function()
 		end
 	end
 
-	print("[SUCCESS] Noclip disabled")
+	executorPrint("[SUCCESS] Noclip disabled")
 end)
 
 addCommand("sit", "Forces your player to sit on the nearest ground, to unsit simply jump once", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		print("[FAIL] Humanoid not found for sit")
+		executorPrint("[FAIL] Humanoid not found for sit")
 		return
 	end
 
 	humanoid.Sit = true
-	print("[SUCCESS] Character sitting")
+	executorPrint("[SUCCESS] Character sitting")
 end)
 
 addCommand("fov", "Changes local fov (field of view), usage: 'fov 80'", function(amount)
 	if not amount or amount == "" then
-		print("[FAIL] Missing FOV amount")
+		executorPrint("[FAIL] Missing FOV amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		print("[FAIL] Invalid FOV value:", amount)
+		executorPrint("[FAIL] Invalid FOV value:", amount)
 		return
 	end
 
-	print("[SUCCESS] FOV set to:", numAmount)
+	executorPrint("[SUCCESS] FOV set to:", numAmount)
 	startCustomFov(amount)
 end)
 
 addCommand("resetfov", "Resets your local fov to the default one set by the owner of this experience", function()
-	print("[SUCCESS] FOV reset to default")
+	executorPrint("[SUCCESS] FOV reset to default")
 	stopCustomFov()
 end)
 
@@ -2680,123 +2672,123 @@ addCommand("fly", "Lets you fly around the game, usage: 'fly 100' For a decently
 	end
 
 	if STATE.flyEnabled then
-		print("[FAIL] Fly is already enabled")
+		executorPrint("[FAIL] Fly is already enabled")
 		return
 	end
 
-	print("[SUCCESS] Fly enabled")
+	executorPrint("[SUCCESS] Fly enabled")
 	startFly(speed)
 end)
 
 addCommand("unfly", "Stops your character from flying any longer unless you use the fly command again", function()
 	if not STATE.flyEnabled then
-		print("[FAIL] Fly is not currently enabled")
+		executorPrint("[FAIL] Fly is not currently enabled")
 		return
 	end
 
-	print("[SUCCESS] Fly disabled")
+	executorPrint("[SUCCESS] Fly disabled")
 	stopFly()
 end)
 
 addCommand("tracers", "Draws tracers, each one leading to different player, - tracer color is based on the players team color", function(distance)
 	if STATE.tracersEnabled then
-		print("[FAIL] Tracers are already enabled")
+		executorPrint("[FAIL] Tracers are already enabled")
 		return
 	end
 
-	print("[SUCCESS] Tracers enabled")
+	executorPrint("[SUCCESS] Tracers enabled")
 	startTracers(distance)
 end)
 
 addCommand("untracers", "Disables the tracers, each one leading to different player, - tracer color is based on the players team color", function()
 	if not STATE.tracersEnabled then
-		print("[FAIL] Tracers are not currently enabled")
+		executorPrint("[FAIL] Tracers are not currently enabled")
 		return
 	end
 
-	print("[SUCCESS] Tracers disabled")
+	executorPrint("[SUCCESS] Tracers disabled")
 	stopTracers()
 end)
 
 addCommand("freecam", "Lets you fly around in sort of a spectator mode, cool minecraft reference huh?", function(speed)
 	if STATE.freecamEnabled then
-		print("[FAIL] Freecam is already enabled")
+		executorPrint("[FAIL] Freecam is already enabled")
 		return
 	end
 
-	print("[SUCCESS] Freecam enabled")
+	executorPrint("[SUCCESS] Freecam enabled")
 	startFreecam(speed)
 end)
 
 addCommand("unfreecam", "Destroys your freecam and puts your camera back to your character", function()
 	if not STATE.freecamEnabled then
-		print("[FAIL] Freecam is not currently enabled")
+		executorPrint("[FAIL] Freecam is not currently enabled")
 		return
 	end
 
-	print("[SUCCESS] Freecam disabled")
+	executorPrint("[SUCCESS] Freecam disabled")
 	stopFreecam()
 end)
 
 addCommand("walkspeed", "Increases your walkspeed accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		print("[FAIL] Missing walkspeed amount")
+		executorPrint("[FAIL] Missing walkspeed amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		print("[FAIL] Invalid walkspeed value:", amount)
+		executorPrint("[FAIL] Invalid walkspeed value:", amount)
 		return
 	end
 
-	print("[SUCCESS] Walkspeed set to:", numAmount)
+	executorPrint("[SUCCESS] Walkspeed set to:", numAmount)
 	setWalkSpeed(amount)
 end)
 
 addCommand("resetwalkspeed", "Resets your characters walkspeed to a default one set by the owner of this experience", function()
-	print("[SUCCESS] Walkspeed reset to default")
+	executorPrint("[SUCCESS] Walkspeed reset to default")
 	resetWalkSpeed()
 end)
 
 addCommand("jumpheight", "Increases your jumpheight accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		print("[FAIL] Missing jumpheight amount")
+		executorPrint("[FAIL] Missing jumpheight amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		print("[FAIL] Invalid jumpheight value:", amount)
+		executorPrint("[FAIL] Invalid jumpheight value:", amount)
 		return
 	end
 
-	print("[SUCCESS] Jumpheight set to:", numAmount)
+	executorPrint("[SUCCESS] Jumpheight set to:", numAmount)
 	setJumpHeight(amount)
 end)
 
 addCommand("resetjumpheight", "Resets your characters jumpheight to a default one set by the owner of this experience", function()
-	print("[SUCCESS] Jumpheight reset to default")
+	executorPrint("[SUCCESS] Jumpheight reset to default")
 	resetJumpHeight()
 end)
 
 addCommand("fullbright", "Illuminates your whole game, this is useful for playing at night!", function()
 	if STATE.fullbrightEnabled then
-		print("[FAIL] Fullbright is already enabled")
+		executorPrint("[FAIL] Fullbright is already enabled")
 		return
 	end
 
-	print("[SUCCESS] Fullbright enabled")
+	executorPrint("[SUCCESS] Fullbright enabled")
 	startFullbright()
 end)
 
 addCommand("unfullbright", "Resets the brightness to the default one set by the owner of this experience", function()
 	if not STATE.fullbrightEnabled then
-		print("[FAIL] Fullbright is not currently enabled")
+		executorPrint("[FAIL] Fullbright is not currently enabled")
 		return
 	end
 
-	print("[SUCCESS] Fullbright disabled")
+	executorPrint("[SUCCESS] Fullbright disabled")
 	stopFullbright()
 end)
 
@@ -2806,7 +2798,7 @@ addCommand("esphighlight", "Combines both the esp and the highlight functions!",
 	else
 		distance = tonumber(distance)
 		if not distance then
-			print("Invalid esphighlight distance")
+			executorPrint("Invalid esphighlight distance")
 			return
 		end
 	end
@@ -2824,56 +2816,56 @@ addCommand("esphighlight", "Combines both the esp and the highlight functions!",
 	end
 
 	updateHighlightVisibility()
-	print("Enabled esphighlight with distance:", distance == math.huge and "infinite" or distance)
+	executorPrint("Enabled esphighlight with distance:", distance == math.huge and "infinite" or distance)
 end)
 
 addCommand("unesphighlight", "Disables the combination of both the esp and the highlight functions!", function()
 	stopNametagSystem()
 	resetAllHighlights()
-	print("Disabled esphighlight")
+	executorPrint("Disabled esphighlight")
 end)
 
 addCommand("maxzoom", "Changes your camera's max zoom distance based on what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		print("[FAIL] Missing zoom amount")
+		executorPrint("[FAIL] Missing zoom amount")
 		return
 	end
 
 	amount = tonumber(amount)
 	if not amount then
-		print("[FAIL] Invalid zoom amount value:", amount)
+		executorPrint("[FAIL] Invalid zoom amount value:", amount)
 		return
 	end
 
 	LocalPlayer.CameraMaxZoomDistance = amount
-	print("[SUCCESS] Max zoom distance set to:", amount)
+	executorPrint("[SUCCESS] Max zoom distance set to:", amount)
 end)
 
 addCommand("defaultzoom", "Changes your camera's max zoom distance to the default settings set by the owner of this experience.", function()
 	LocalPlayer.CameraMaxZoomDistance = STATE.defaultCameraMaxZoom
-	print("[SUCCESS] Camera zoom reset to default:", STATE.defaultCameraMaxZoom)
+	executorPrint("[SUCCESS] Camera zoom reset to default:", STATE.defaultCameraMaxZoom)
 end)
 
 addCommand("teams", "Shows every team that exists in this experience", function()
-	print("[SUCCESS] Teams list displayed")
+	executorPrint("[SUCCESS] Teams list displayed")
 	populateTeamsList()
 end)
 
 addCommand("destroy", "Destroys the entire system leaving no trace of use!", function()
-	print("[SUCCESS] Executor system destroyed")
+	executorPrint("[SUCCESS] Executor system destroyed")
 	destroyExecutorSystem()
 end)
 
 addCommand("hitboxtransparency", "Changes the transparency of player humanoid root parts (0-1), usage: hitboxtransparency {amount} {player/team/all}", function(...)
 	local args = {...}
 	if #args < 1 then
-		print("Usage: hitboxtransparency {amount} {player/team/all}")
+		executorPrint("Usage: hitboxtransparency {amount} {player/team/all}")
 		return
 	end
 
 	local amount = tonumber(args[1])
 	if not amount then
-		print("Invalid transparency value")
+		executorPrint("Invalid transparency value")
 		return
 	end
 
@@ -2896,7 +2888,7 @@ addCommand("hitboxtransparency", "Changes the transparency of player humanoid ro
 			applyStoredHitboxTransparency(player)
 		end
 
-		print("Hitbox transparency set to", amount, "for all players")
+		executorPrint("Hitbox transparency set to", amount, "for all players")
 		return
 	end
 
@@ -2910,40 +2902,40 @@ addCommand("hitboxtransparency", "Changes the transparency of player humanoid ro
 				end
 			end
 
-			print("Hitbox transparency set to", amount, "for team:", team.Name)
+			executorPrint("Hitbox transparency set to", amount, "for team:", team.Name)
 			return
 		end
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		print("Player or team not found:", targetName)
+		executorPrint("Player or team not found:", targetName)
 		return
 	end
 
 	STATE.hitboxTransparencyPlayers[targetPlayer.UserId] = amount
 	applyStoredHitboxTransparency(targetPlayer)
-	print("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
+	executorPrint("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
 end)
 
 addCommand("bind", "Binds a command to the specified key, usage: bind {key} {command}", function(...)
 	local args = {...}
 	if #args < 2 then
-		print("[FAIL] Usage: bind {key} {command}")
+		executorPrint("[FAIL] Usage: bind {key} {command}")
 		return
 	end
 
 	local keyName = string.upper(args[1])
 	local keyCode = Enum.KeyCode[keyName]
 	if not keyCode then
-		print("[FAIL] Invalid key:", keyName)
+		executorPrint("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	table.remove(args, 1)
 	local commandText = table.concat(args, " ")
 	if commandText == "" then
-		print("[FAIL] Missing command to bind")
+		executorPrint("[FAIL] Missing command to bind")
 		return
 	end
 
@@ -2951,29 +2943,29 @@ addCommand("bind", "Binds a command to the specified key, usage: bind {key} {com
 
 	if lowerCommand == "clickteleport" then
 		STATE.ghostBinds[keyCode] = "clickteleport"
-		print("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
+		executorPrint("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
 		return
 	end
 
 	if lowerCommand == "clickdelete" then
 		STATE.ghostBinds[keyCode] = "clickdelete"
-		print("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
+		executorPrint("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
 		return
 	end
 
 	if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
-		print("[FAIL] Cannot bind bind-related commands")
+		executorPrint("[FAIL] Cannot bind bind-related commands")
 		return
 	end
 
 	STATE.keybinds[keyCode] = commandText
 	saveBinds()
-	print("[SUCCESS] Bound key", keyName, "to command:", commandText)
+	executorPrint("[SUCCESS] Bound key", keyName, "to command:", commandText)
 end)
 
 addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	if not key or key == "" then
-		print("[FAIL] Usage: unbind {key}")
+		executorPrint("[FAIL] Usage: unbind {key}")
 		return
 	end
 
@@ -2981,12 +2973,12 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	local keyCode = Enum.KeyCode[keyName]
 
 	if not keyCode then
-		print("[FAIL] Invalid key:", keyName)
+		executorPrint("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	if not STATE.keybinds[keyCode] and not STATE.toggleBinds[keyCode] and not STATE.ghostBinds[keyCode] then
-		print("[FAIL] No bind found for key:", keyName)
+		executorPrint("[FAIL] No bind found for key:", keyName)
 		return
 	end
 
@@ -2995,7 +2987,7 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	STATE.ghostBinds[keyCode] = nil
 	saveBinds()
 
-	print("[SUCCESS] Unbound key:", keyName)
+	executorPrint("[SUCCESS] Unbound key:", keyName)
 end)
 
 addCommand("binds", "Lets you view all of your previously created binds.", function()
@@ -3037,7 +3029,7 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Binds list displayed")
+	executorPrint("[SUCCESS] Binds list displayed")
 end)
 
 addCommand("clearbinds", "Clears all of your previously created binds", function()
@@ -3046,33 +3038,33 @@ addCommand("clearbinds", "Clears all of your previously created binds", function
 	table.clear(STATE.ghostBinds)
 	saveBinds()
 
-	print("[SUCCESS] All binds cleared")
+	executorPrint("[SUCCESS] All binds cleared")
 end)
 
 addCommand("togglebind", "Binds a toggleable command to the specified key", function(...)
 	local args = {...}
 	if #args < 2 then
-		print("[FAIL] Usage: togglebind {key} {command}")
+		executorPrint("[FAIL] Usage: togglebind {key} {command}")
 		return
 	end
 
 	local keyName = string.upper(args[1])
 	local keyCode = Enum.KeyCode[keyName]
 	if not keyCode then
-		print("[FAIL] Invalid key:", keyName)
+		executorPrint("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	table.remove(args, 1)
 	local commandText = table.concat(args, " ")
 	if commandText == "" then
-		print("[FAIL] Missing command to bind")
+		executorPrint("[FAIL] Missing command to bind")
 		return
 	end
 
 	local lowerCommand = string.lower(commandText)
 	if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
-		print("[FAIL] Cannot bind bind-related commands")
+		executorPrint("[FAIL] Cannot bind bind-related commands")
 		return
 	end
 
@@ -3103,7 +3095,7 @@ addCommand("togglebind", "Binds a toggleable command to the specified key", func
 	end
 
 	if not offCommand then
-		print("[FAIL] Toggle command not supported. Use 'bind' for non-toggle commands.")
+		executorPrint("[FAIL] Toggle command not supported. Use 'bind' for non-toggle commands.")
 		return
 	end
 
@@ -3114,57 +3106,57 @@ addCommand("togglebind", "Binds a toggleable command to the specified key", func
 	}
 
 	saveBinds()
-	print("[SUCCESS] Toggle bind created:", keyName, "->", matchedCommand)
+	executorPrint("[SUCCESS] Toggle bind created:", keyName, "->", matchedCommand)
 end)
 
 addCommand("waypointcreate", "Creates a waypoint at your current position with the specified name", function(...)
 	local args = {...}
 	if #args < 1 then
-		print("[FAIL] Usage: waypointcreate {name}")
+		executorPrint("[FAIL] Usage: waypointcreate {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		print("[FAIL] Missing waypoint name")
+		executorPrint("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if STATE.waypoints[waypointName] then
-		print("[FAIL] Waypoint already exists:", waypointName)
+		executorPrint("[FAIL] Waypoint already exists:", waypointName)
 		return
 	end
 
 	local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not root then
-		print("[FAIL] HumanoidRootPart not found")
+		executorPrint("[FAIL] HumanoidRootPart not found")
 		return
 	end
 
 	STATE.waypoints[waypointName] = root.Position
 
 	if saveWaypoints() then
-		print("[SUCCESS] Waypoint created and saved:", waypointName)
+		executorPrint("[SUCCESS] Waypoint created and saved:", waypointName)
 	else
-		print("[SUCCESS] Waypoint created (not saved - executor API unavailable):", waypointName)
+		executorPrint("[SUCCESS] Waypoint created (not saved - executor API unavailable):", waypointName)
 	end
 end)
 
 addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	local args = {...}
 	if #args < 1 then
-		print("[FAIL] Usage: waypointdelete {name}")
+		executorPrint("[FAIL] Usage: waypointdelete {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		print("[FAIL] Missing waypoint name")
+		executorPrint("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if not STATE.waypoints[waypointName] then
-		print("[FAIL] Waypoint not found:", waypointName)
+		executorPrint("[FAIL] Waypoint not found:", waypointName)
 		return
 	end
 
@@ -3195,9 +3187,9 @@ addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	end
 
 	if saveWaypoints() then
-		print("[SUCCESS] Waypoint deleted and saved:", waypointName)
+		executorPrint("[SUCCESS] Waypoint deleted and saved:", waypointName)
 	else
-		print("[SUCCESS] Waypoint deleted (not saved - executor API unavailable):", waypointName)
+		executorPrint("[SUCCESS] Waypoint deleted (not saved - executor API unavailable):", waypointName)
 	end
 end)
 
@@ -3229,48 +3221,48 @@ addCommand("waypoints", "Shows all created waypoints", function()
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Waypoints list displayed")
+	executorPrint("[SUCCESS] Waypoints list displayed")
 end)
 
 addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(...)
 	local args = {...}
 	if #args < 1 then
-		print("[FAIL] Usage: gotowaypoint {name}")
+		executorPrint("[FAIL] Usage: gotowaypoint {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		print("[FAIL] Missing waypoint name")
+		executorPrint("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if not STATE.waypoints[waypointName] then
-		print("[FAIL] Waypoint not found:", waypointName)
+		executorPrint("[FAIL] Waypoint not found:", waypointName)
 		return
 	end
 
 	local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not root then
-		print("[FAIL] HumanoidRootPart not found")
+		executorPrint("[FAIL] HumanoidRootPart not found")
 		return
 	end
 
 	root.CFrame = CFrame.new(STATE.waypoints[waypointName])
-	print("[SUCCESS] Teleported to waypoint:", waypointName)
+	executorPrint("[SUCCESS] Teleported to waypoint:", waypointName)
 end)
 
 addCommand("savewaypoints", "Manually saves all waypoints to file", function()
 	if saveWaypoints() then
-		print("[SUCCESS] Waypoints saved to file")
+		executorPrint("[SUCCESS] Waypoints saved to file")
 	else
-		print("[FAIL] Could not save waypoints - executor API unavailable")
+		executorPrint("[FAIL] Could not save waypoints - executor API unavailable")
 	end
 end)
 
 addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-based transparency", function()
 	if STATE.waypointShowEnabled and next(STATE.waypointMarkers) ~= nil then
-		print("[FAIL] Waypoints are already shown")
+		executorPrint("[FAIL] Waypoints are already shown")
 		return
 	end
 
@@ -3291,29 +3283,29 @@ addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-ba
 	STATE.waypointShowEnabled = true
 	startWaypointRendering()
 
-	print("[SUCCESS] Showing waypoint markers for", count, "waypoints")
+	executorPrint("[SUCCESS] Showing waypoint markers for", count, "waypoints")
 end)
 
 addCommand("hidewaypoints", "Hides all waypoint markers", function()
 	if not STATE.waypointShowEnabled then
-		print("[FAIL] Waypoints are already hidden")
+		executorPrint("[FAIL] Waypoints are already hidden")
 		return
 	end
 
 	stopWaypointRendering()
 	destroyWaypointMarkers()
-	print("[SUCCESS] Hid all waypoint markers")
+	executorPrint("[SUCCESS] Hid all waypoint markers")
 end)
 
 addCommand("playerinfo", "Displays detailed information about the specified player", function(username)
 	if not username or username == "" then
-		print("[FAIL] Missing username for playerinfo command")
+		executorPrint("[FAIL] Missing username for playerinfo command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		print("[FAIL] Player not found:", username)
+		executorPrint("[FAIL] Player not found:", username)
 		return
 	end
 
@@ -3321,16 +3313,16 @@ addCommand("playerinfo", "Displays detailed information about the specified play
 end)
 
 addCommand("clickteleport", "Ghost command - Teleports you to where you click when holding the bound key. Must be bound using the bind command.", function()
-	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
+	executorPrint("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
 end)
 
 addCommand("clickdelete", "Ghost command - Deletes the object you click when holding the bound key. Must be bound using the bind command.", function()
-	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
+	executorPrint("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
 addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cmdrbind {key}", function(key)
 	if not key or key == "" then
-		print("[FAIL] Usage: cmdrbind {key}")
+		executorPrint("[FAIL] Usage: cmdrbind {key}")
 		return
 	end
 
@@ -3338,7 +3330,7 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	local keyCode = Enum.KeyCode[keyName]
 
 	if not keyCode then
-		print("[FAIL] Invalid key:", keyName)
+		executorPrint("[FAIL] Invalid key:", keyName)
 		return
 	end
 
@@ -3351,7 +3343,7 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	saveBinds()
 
 	helperBg.Visible = true
-	print("[SUCCESS] Command menu key set to:", displayName)
+	executorPrint("[SUCCESS] Command menu key set to:", displayName)
 
 	if STATE.menuOpen then
 		commandInput.Text = ""
