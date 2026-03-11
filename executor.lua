@@ -1529,6 +1529,14 @@ local function applyStoredHitboxToCharacter(player, character)
 
 	hrp.Size = getCubeHitboxSize(originalHumanoidRootPartSizes[player], multiplier)
 	hrp.CanCollide = false
+
+	-- enforce hitbox appearance
+	hrp.Transparency = hitboxTransparency or 0.95
+	hrp.Material = Enum.Material.SmoothPlastic
+
+	if player.Team and player.Team.TeamColor then
+		hrp.Color = player.Team.TeamColor.Color
+	end
 end
 
 local function restoreHitboxForPlayer(player)
@@ -1593,6 +1601,14 @@ local function refreshHitboxForPlayer(player)
 
 	hrp.Size = getCubeHitboxSize(originalHumanoidRootPartSizes[player], multiplier)
 	hrp.CanCollide = false
+
+	-- enforce hitbox appearance
+	hrp.Transparency = hitboxTransparency or 0.95
+	hrp.Material = Enum.Material.SmoothPlastic
+
+	if player.Team and player.Team.TeamColor then
+		hrp.Color = player.Team.TeamColor.Color
+	end
 end
 
 local function refreshAllActiveHitboxes()
@@ -1658,7 +1674,7 @@ local function applyStoredHitboxTransparency(player)
 	end
 
 	if transparency == nil then
-		root.Transparency = 0
+		root.Transparency = hitboxTransparency
 		return
 	end
 
@@ -1686,16 +1702,19 @@ local function startHitboxEnforcement()
 	hitboxSystemEnabled = true
 	local RunService = game:GetService("RunService")
 	hitboxEnforcementConnection = RunService.Heartbeat:Connect(function()
-		if not hitboxSystemEnabled then
-			return
-		end
+
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LocalPlayer then
-				if hitboxIgnoreOwnTeam and player.Team == LocalPlayer.Team then
-					restoreHitboxForPlayer(player)
-				else
-					refreshHitboxForPlayer(player)
-					applyStoredHitboxTransparency(player)
+
+				refreshHitboxForPlayer(player)
+
+				-- enforce transparency every frame
+				local character = player.Character
+				if character then
+					local hrp = character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						hrp.Transparency = hitboxTransparency or 0.95
+					end
 				end
 			end
 		end
