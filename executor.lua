@@ -1148,7 +1148,7 @@ local function startFreecam(speed)
 		end
 
 		currentCamera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
-		currentCamera.Focus = CFrame.new(STATE.freecamPosition)
+		currentCamera.Focus = currentCamera.CFrame * CFrame.new(0,0,-512)
 	end)
 end
 
