@@ -512,10 +512,10 @@ local function loadBinds()
 	local ghostBinds = STATE.ghostBinds
 
 	if data.keybinds then
-		for keyName, command in pairs(data.keybinds) do
+		for keyName, commands in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
 			if keyCode then
-				keybinds[keyCode] = command
+				keybinds[keyCode] = commands
 			end
 		end
 	end
@@ -556,8 +556,8 @@ local function saveBinds()
 		ghostbinds = {}
 	}
 
-	for key, command in pairs(STATE.keybinds) do
-		data.keybinds[key.Name] = command
+	for key, commands in pairs(STATE.keybinds) do
+		data.keybinds[key.Name] = commands
 	end
 
 	for key, info in pairs(STATE.toggleBinds) do
@@ -3028,7 +3028,12 @@ addCommand("bind", "Binds a command to the specified key, usage: bind {key} {com
 		return
 	end
 
-	STATE.keybinds[keyCode] = commandText
+	if not STATE.keybinds[keyCode] then
+		STATE.keybinds[keyCode] = {}
+	end
+
+	table.insert(STATE.keybinds[keyCode], commandText)
+
 	saveBinds()
 	print("[SUCCESS] Bound key", keyName, "to command:", commandText)
 end)
@@ -3079,9 +3084,11 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 		end
 	end
 
-	for key, command in pairs(STATE.keybinds) do
+	for key, commands in pairs(STATE.keybinds) do
 		found = true
-		createLine(key.Name .. " -> " .. command)
+		for _, cmd in ipairs(commands) do
+			createLine(key.Name .. " -> " .. cmd)
+		end
 	end
 
 	for key, ghost in pairs(STATE.ghostBinds) do
@@ -3951,9 +3958,11 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
-		local boundCommand = STATE.keybinds[key]
-		if boundCommand then
-			executeCommand(boundCommand)
+		local boundCommands = STATE.keybinds[key]
+		if boundCommands then
+			for _, cmd in ipairs(boundCommands) do
+				executeCommand(cmd)
+			end
 			return
 		end
 	end
