@@ -3761,16 +3761,32 @@ local function openMenu()
 	resetInputAndSuggestions()
 	hideHelpList()
 
-	-- clear any accidental key input
+	commandInput.TextEditable = false
+	commandInput:ReleaseFocus()
 	commandInput.Text = ""
 	commandInput.CursorPosition = -1
 
 	tween(mainBg, 0.05, {BackgroundTransparency = 0.45})
 
 	task.defer(function()
-		if STATE.menuOpen then
-			commandInput:CaptureFocus()
+		if not STATE.menuOpen then
+			return
 		end
+
+		commandInput.Text = ""
+		commandInput.CursorPosition = -1
+
+		task.defer(function()
+			if not STATE.menuOpen then
+				return
+			end
+
+			commandInput.TextEditable = true
+			commandInput:CaptureFocus()
+			commandInput.Text = ""
+			commandInput.CursorPosition = -1
+			updateSuggestions()
+		end)
 	end)
 end
 
@@ -3921,41 +3937,13 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 	local key = input.KeyCode
 
 	-- MENU KEY OVERRIDE (always uses current live bind)
-	if key == Enum.KeyCode.Semicolon then
+	if key == STATE.commandOpenKey then
 		if not STATE.welcomeFinished then
 			return
 		end
 
-		STATE.pendingMenuOpenCharacter = getTypedCharacterForKeyCode(Enum.KeyCode.Semicolon)
-
+		STATE.pendingMenuOpenCharacter = nil
 		toggleMenu()
-
-		if STATE.menuOpen then
-			commandInput:ReleaseFocus()
-			commandInput.Text = ""
-			commandInput.CursorPosition = -1
-
-			task.defer(function()
-				if not STATE.menuOpen then
-					return
-				end
-
-				commandInput.Text = ""
-				commandInput.CursorPosition = -1
-				commandInput:CaptureFocus()
-				updateSuggestions()
-
-				task.defer(function()
-					if STATE.menuOpen then
-						sanitizeCommandInput()
-						updateSuggestions()
-					end
-				end)
-			end)
-		else
-			STATE.pendingMenuOpenCharacter = nil
-		end
-
 		return
 	end
 
