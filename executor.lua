@@ -5191,24 +5191,3 @@ characterCleanupConnection = LocalPlayer.CharacterAdded:Connect(function()
 	stopTracers()
 	stopFreecam()
 end)
-```
-
-I have added 2 commands:
-```
-clickteleport = {
-	Name = "clickteleport",
-	Description = "Teleport to clicked position (ghost command – requires bind)",
-	Ghost = true,
-	Execute = function()
-		print("[FAIL] clickteleport is a ghost command and must be bound to a key.")
-	end
-},
-
-clickdelete = {
-	Name = "clickdelete",
-	Description = "Delete clicked object (ghost command – requires bind)",
-	Ghost = true,
-	Execute = function()
-		print("[FAIL] clickdelete is a ghost command and must be bound to a key.")
-	end
-},
