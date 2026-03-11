@@ -515,7 +515,11 @@ local function loadBinds()
 		for keyName, commands in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
 			if keyCode then
-				keybinds[keyCode] = commands
+				if type(commands) == "string" then
+					keybinds[keyCode] = {commands}
+				else
+					keybinds[keyCode] = commands
+				end
 			end
 		end
 	end
