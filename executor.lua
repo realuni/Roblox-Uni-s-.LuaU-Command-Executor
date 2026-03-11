@@ -1064,7 +1064,15 @@ local function startFreecam(speed)
 
 	camera.CameraType = Enum.CameraType.Scriptable
 	camera.CFrame = startCFrame
-	camera.Focus = startCFrame * CFrame.new(0, 0, -512)
+	camera.Focus = startCFrame * CFrame.new(0,0,-512)
+
+	-- prevent dark exposure bug
+	camera:GetPropertyChangedSignal("CFrame"):Connect(function()
+		if STATE.freecamEnabled then
+			camera.Focus = camera.CFrame * CFrame.new(0,0,-512)
+		end
+	end)
+
 
 	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	UserInputService.MouseIconEnabled = false
@@ -1140,7 +1148,7 @@ local function startFreecam(speed)
 		end
 
 		currentCamera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
-		currentCamera.Focus = currentCamera.CFrame * CFrame.new(0, 0, -512)
+		currentCamera.Focus = CFrame.new(STATE.freecamPosition)
 	end)
 end
 
