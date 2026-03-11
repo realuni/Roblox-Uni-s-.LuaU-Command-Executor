@@ -14,6 +14,12 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local commandExecutor = Instance.new("ScreenGui")
 commandExecutor.Name = "CommandExecutor"
+
+-- FORCE UI ABOVE EVERYTHING
+commandExecutor.IgnoreGuiInset = true
+commandExecutor.DisplayOrder = 999999
+commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+commandExecutor.Name = "CommandExecutor"
 commandExecutor.IgnoreGuiInset = true
 commandExecutor.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -371,6 +377,7 @@ exampleHelperLabel.RichText = true
 -- SETTINGS
 --////////////////////////////////////////////////////
 
+local hitboxTransparency = 0.9
 local highlightObjects = {}
 local highlightConnections = {}
 local hitboxEnforcementConnection = nil
@@ -1883,32 +1890,59 @@ local Commands = {
 	},
 	{
 		Name = "hitbox",
-		Description = "Multiplies the hitbox area of the selected player, usage: 'hitbox all 1' for a 100% hitbox increase for every player",
-		Execute = function(targetName, multiplier, ignoreOwn)
+		Description = "Multiplies the hitbox area of the selected player or team, usage: 'hitbox username 2' or 'hitbox Engineering Department 2'",
+		Execute = function(...)
 
-			targetName = tostring(targetName or "")
-			multiplier = tonumber(multiplier)
-			ignoreOwn = tostring(ignoreOwn or ""):lower()
+			local args = {...}
 
-			if targetName == "" then
-				print("Missing target name")
+			if #args < 2 then
+				print("Usage: hitbox {player/team} {multiplier}")
 				return
 			end
+
+			local multiplier = tonumber(args[#args])
 
 			if not multiplier then
 				print("Invalid hitbox multiplier")
 				return
 			end
 
-			ensureHitboxTracking()
+			table.remove(args, #args)
 
-			if ignoreOwn == "ignoreown" then
-				hitboxIgnoreOwnTeam = true
-			else
-				hitboxIgnoreOwnTeam = false
+			local targetName = table.concat(args, " ")
+
+			if targetName == "" then
+				print("Missing target name or team")
+				return
 			end
 
-			if string.lower(targetName) == "all" then
+			ensureHitboxTracking()
+
+			local Players = game:GetService("Players")
+			local Teams = game:GetService("Teams")
+
+			local lowerTarget = string.lower(targetName)
+
+			-- APPLY TO TEAM
+			for _, team in ipairs(Teams:GetTeams()) do
+				if string.lower(team.Name) == lowerTarget then
+
+					for _, player in ipairs(Players:GetPlayers()) do
+						if player.Team == team and player ~= LocalPlayer then
+							applyHitboxToPlayer(player, multiplier)
+						end
+					end
+
+					hitboxSystemEnabled = true
+					refreshAllActiveHitboxes()
+
+					print("Applied hitbox multiplier to team:", team.Name, multiplier)
+					return
+				end
+			end
+
+			-- APPLY TO ALL
+			if lowerTarget == "all" then
 
 				hitboxAllMultiplier = multiplier
 
@@ -1921,19 +1955,15 @@ local Commands = {
 				hitboxSystemEnabled = true
 				refreshAllActiveHitboxes()
 
-				if hitboxIgnoreOwnTeam then
-					print("Applied hitbox multiplier to everyone except your team:", multiplier)
-				else
-					print("Applied hitbox multiplier to all players:", multiplier)
-				end
-
+				print("Applied hitbox multiplier to all players:", multiplier)
 				return
 			end
 
+			-- APPLY TO SINGLE PLAYER
 			local targetPlayer = findPlayerByName(targetName)
 
 			if not targetPlayer then
-				print("Player not found:", targetName)
+				print("Player or team not found:", targetName)
 				return
 			end
 
@@ -1941,6 +1971,7 @@ local Commands = {
 			applyHitboxToPlayer(targetPlayer, multiplier)
 
 			print("Applied persistent hitbox multiplier to", targetPlayer.Name, multiplier)
+
 		end,
 	},
 	{
@@ -2359,10 +2390,127 @@ local Commands = {
 		end,
 	},
 	{
+		Name = "teams",
+		Description = "Shows every team that exists in this experience",
+		Execute = function()
+			populateTeamsList()
+		end,
+	},
+
+	{
 		Name = "destroy",
 		Description = "Destroys the entire system leaving no trace of use!",
 		Execute = function()
 			destroyExecutorSystem()
+		end,
+	},
+	{
+		Name = "hitboxtransparency",
+		Description = "Changes the transparency of player humanoid root parts (0-1), usage: hitboxtransparency {amount} {player/team/all}",
+		Execute = function(...)
+
+			local args = {...}
+
+			if #args < 1 then
+				print("Usage: hitboxtransparency {amount} {player/team/all}")
+				return
+			end
+
+			local amount = tonumber(args[1])
+
+			if not amount then
+				print("Invalid transparency value")
+				return
+			end
+
+			amount = math.clamp(amount, 0, 1)
+			hitboxTransparency = amount
+
+			local Players = game:GetService("Players")
+			local Teams = game:GetService("Teams")
+
+			-- if no target specified → default to all
+			if #args == 1 then
+				args[2] = "all"
+			end
+
+			table.remove(args, 1)
+			local targetName = table.concat(args, " ")
+			local lowerTarget = string.lower(targetName)
+
+			-- APPLY TO ALL
+			if lowerTarget == "all" then
+
+				for _, player in ipairs(Players:GetPlayers()) do
+					if player ~= LocalPlayer then
+
+						local character = player.Character
+						if not character then continue end
+
+						local root = character:FindFirstChild("HumanoidRootPart")
+						if not root then continue end
+
+						root.Transparency = hitboxTransparency
+
+						if player.Team and player.Team.TeamColor then
+							root.Color = player.Team.TeamColor.Color
+						else
+							root.Color = Color3.new(1,1,1)
+						end
+					end
+				end
+
+				print("Hitbox transparency set to", amount, "for all players")
+				return
+			end
+
+			-- APPLY TO TEAM
+			for _, team in ipairs(Teams:GetTeams()) do
+				if string.lower(team.Name) == lowerTarget then
+
+					for _, player in ipairs(Players:GetPlayers()) do
+						if player.Team == team and player ~= LocalPlayer then
+
+							local character = player.Character
+							if not character then continue end
+
+							local root = character:FindFirstChild("HumanoidRootPart")
+							if not root then continue end
+
+							root.Transparency = hitboxTransparency
+							root.Color = team.TeamColor.Color
+						end
+					end
+
+					print("Hitbox transparency set to", amount, "for team:", team.Name)
+					return
+				end
+			end
+
+			-- APPLY TO SINGLE PLAYER
+			local targetPlayer = findPlayerByName(targetName)
+
+			if not targetPlayer then
+				print("Player or team not found:", targetName)
+				return
+			end
+
+			local character = targetPlayer.Character
+			if not character then return end
+
+			local root = character:FindFirstChild("HumanoidRootPart")
+			if not root then return end
+
+			root.Transparency = hitboxTransparency
+
+			if targetPlayer.Team and targetPlayer.Team.TeamColor then
+				root.Color = targetPlayer.Team.TeamColor.Color
+			else
+				root.Color = Color3.new(1,1,1)
+			end
+
+			print("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
+
 		end,
 	},
 }
@@ -2374,6 +2522,8 @@ local Commands = {
 local function getCommandDisplayNameForHelp(cmd)
 	if cmd.Name == "esp" then
 		return "esp {distance}"
+	elseif cmd.Name == "hitboxtransparency" then
+		return "hitboxtransparency {amount}"
 	elseif cmd.Name == "destroy" then
 		return "destroy"
 	elseif cmd.Name == "tpwalk" then
@@ -2381,7 +2531,7 @@ local function getCommandDisplayNameForHelp(cmd)
 	elseif cmd.Name == "blink" then
 		return "blink {distance}"
 	elseif cmd.Name == "hitbox" then
-		return "hitbox {player/all} {multiplier} {ignoreown}"
+		return "hitbox {player/team} {multiplier}"
 	elseif cmd.Name == "highlight" then
 		return "highlight {player/all} {distance}"
 	elseif cmd.Name == "goto" then
@@ -2404,6 +2554,8 @@ local function getCommandDisplayNameForHelp(cmd)
 		return "jumpheight {amount}"
 	elseif cmd.Name == "maxzoom" then
 		return "maxzoom {amount}"
+	elseif cmd.Name == "hitboxtransparency" then
+		return "hitboxtransparency {amount} {player/team/all}"
 	else
 		return cmd.Name
 	end
@@ -2450,438 +2602,477 @@ populateHelpList = function()
 	helperBg.Visible = true
 end
 
-hideHelpList = function()
-	helperBg.Visible = false
+populateTeamsList = function()
+
 	clearHelpEntries()
+
 	exampleHelperTemplate.Visible = false
-	exampleHelperTemplate.CommandLine.Text = "Command Name : Command Description"
-end
 
-local originalTexts = {
-	[title1] = title1.Text,
-	[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
-	[title3] = title3.Text,
-}
+	local Teams = game:GetService("Teams")
 
-title2.Text = originalTexts[title2]
+	for index, team in ipairs(Teams:GetTeams()) do
 
-local function tween(object, time, properties)
-	local info = TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local tw = TweenService:Create(object, info, properties)
-	tw:Play()
-	return tw
-end
+		local entry = exampleHelperTemplate:Clone()
+		entry.Name = "TeamEntry_" .. index
+		entry.Visible = true
+		entry.Parent = helperScrollingFrame
+		entry.Size = UDim2.new(1, 0, 0, 28)
 
-local function typewrite(label, fullText)
-	label.Text = ""
-	for i = 1, #fullText do
-		label.Text = string.sub(fullText, 1, i)
-		task.wait(TYPE_SPEED)
+		local label = entry:FindFirstChild("CommandLine")
+
+		if label then
+			label.RichText = true
+
+			label.Text = string.format(
+				"<font color=\"rgb(227,227,227)\">%s</font>",
+				team.Name
+			)
+		end
+
 	end
+
+	helperBg.Visible = true
+
 end
 
-local function fadeWelcomeOut()
-	local tweens = {}
+	hideHelpList = function()
+		helperBg.Visible = false
+		clearHelpEntries()
+		exampleHelperTemplate.Visible = false
+		exampleHelperTemplate.CommandLine.Text = "Command Name : Command Description"
+	end
 
-	table.insert(tweens, tween(welcome, FADE_TIME, {BackgroundTransparency = 1}))
-	table.insert(tweens, tween(title1, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
-	table.insert(tweens, tween(title2, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
-	table.insert(tweens, tween(title3, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
+	local originalTexts = {
+		[title1] = title1.Text,
+		[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
+		[title3] = title3.Text,
+	}
 
-	task.wait(FADE_TIME)
+	title2.Text = originalTexts[title2]
 
-	welcome.Visible = false
-	title1.Visible = false
-	title2.Visible = false
-	title3.Visible = false
+	local function tween(object, time, properties)
+		local info = TweenInfo.new(time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local tw = TweenService:Create(object, info, properties)
+		tw:Play()
+		return tw
+	end
 
-	welcomeFinished = true
-end
-
-local function playWelcomeSequence()
-	welcome.Visible = true
-	title1.Visible = true
-	title2.Visible = true
-	title3.Visible = true
-
-	welcome.BackgroundTransparency = 0.25
-	title1.TextTransparency = 0
-	title2.TextTransparency = 0
-	title3.TextTransparency = 0
-	title1.BackgroundTransparency = 1
-	title2.BackgroundTransparency = 1
-	title3.BackgroundTransparency = 1
-
-	title1.Text = ""
-	title2.Text = ""
-	title3.Text = ""
-
-	typewrite(title1, originalTexts[title1])
-	task.wait(BETWEEN_TITLES_DELAY)
-
-	typewrite(title2, originalTexts[title2])
-	task.wait(BETWEEN_TITLES_DELAY)
-
-	typewrite(title3, originalTexts[title3])
-	task.wait(WELCOME_HOLD_TIME)
-
-	fadeWelcomeOut()
-end
-
-local function clearSuggestionEntries()
-	for _, child in ipairs(container:GetChildren()) do
-		if child:IsA("Frame") and child ~= exampleSuggestionTemplate then
-			child:Destroy()
+	local function typewrite(label, fullText)
+		label.Text = ""
+		for i = 1, #fullText do
+			label.Text = string.sub(fullText, 1, i)
+			task.wait(TYPE_SPEED)
 		end
 	end
-end
 
-local function resetSuggester()
-	currentBestMatch = nil
-	commandSuggester.Visible = false
-	suggesterCommandName.Text = "Command Name"
-	suggesterCommandDescription.Text = "Command Description Goes Here"
-	clearSuggestionEntries()
-	exampleSuggestionTemplate.Visible = false
-	exampleSuggestionTemplate.CommandName.Text = "Command Name"
-	exampleSuggestionTemplate.CommandName.TextColor3 = COLOR_NORMAL
-end
+	local function fadeWelcomeOut()
+		local tweens = {}
 
-local function resetInputAndSuggestions()
-	commandInput.Text = ""
-	commandInput.CursorPosition = -1
-	resetSuggester()
-end
+		table.insert(tweens, tween(welcome, FADE_TIME, {BackgroundTransparency = 1}))
+		table.insert(tweens, tween(title1, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
+		table.insert(tweens, tween(title2, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
+		table.insert(tweens, tween(title3, FADE_TIME, {TextTransparency = 1, BackgroundTransparency = 1}))
 
-local function normalize(str)
-	return string.lower(tostring(str or ""))
-end
+		task.wait(FADE_TIME)
 
-local function getSearchText(str)
-	str = tostring(str or "")
-	str = str:gsub("^%s+", "")
-	return str
-end
+		welcome.Visible = false
+		title1.Visible = false
+		title2.Visible = false
+		title3.Visible = false
 
-local function scoreCommand(query, commandName)
-	query = normalize(query)
-	commandName = normalize(commandName)
+		welcomeFinished = true
+	end
 
-	if query == "" then
+	local function playWelcomeSequence()
+		welcome.Visible = true
+		title1.Visible = true
+		title2.Visible = true
+		title3.Visible = true
+
+		welcome.BackgroundTransparency = 0.25
+		title1.TextTransparency = 0
+		title2.TextTransparency = 0
+		title3.TextTransparency = 0
+		title1.BackgroundTransparency = 1
+		title2.BackgroundTransparency = 1
+		title3.BackgroundTransparency = 1
+
+		title1.Text = ""
+		title2.Text = ""
+		title3.Text = ""
+
+		typewrite(title1, originalTexts[title1])
+		task.wait(BETWEEN_TITLES_DELAY)
+
+		typewrite(title2, originalTexts[title2])
+		task.wait(BETWEEN_TITLES_DELAY)
+
+		typewrite(title3, originalTexts[title3])
+		task.wait(WELCOME_HOLD_TIME)
+
+		fadeWelcomeOut()
+	end
+
+	local function clearSuggestionEntries()
+		for _, child in ipairs(container:GetChildren()) do
+			if child:IsA("Frame") and child ~= exampleSuggestionTemplate then
+				child:Destroy()
+			end
+		end
+	end
+
+	local function resetSuggester()
+		currentBestMatch = nil
+		commandSuggester.Visible = false
+		suggesterCommandName.Text = "Command Name"
+		suggesterCommandDescription.Text = "Command Description Goes Here"
+		clearSuggestionEntries()
+		exampleSuggestionTemplate.Visible = false
+		exampleSuggestionTemplate.CommandName.Text = "Command Name"
+		exampleSuggestionTemplate.CommandName.TextColor3 = COLOR_NORMAL
+	end
+
+	local function resetInputAndSuggestions()
+		commandInput.Text = ""
+		commandInput.CursorPosition = -1
+		resetSuggester()
+	end
+
+	local function normalize(str)
+		return string.lower(tostring(str or ""))
+	end
+
+	local function getSearchText(str)
+		str = tostring(str or "")
+		str = str:gsub("^%s+", "")
+		return str
+	end
+
+	local function scoreCommand(query, commandName)
+		query = normalize(query)
+		commandName = normalize(commandName)
+
+		if query == "" then
+			return -math.huge
+		end
+
+		if commandName == query then
+			return 1000
+		end
+
+		if string.sub(commandName, 1, #query) == query then
+			return 800 - (#commandName - #query)
+		end
+
+		local startPos = string.find(commandName, query, 1, true)
+		if startPos then
+			return 600 - startPos
+		end
+
+		local score = 0
+		local qIndex = 1
+		local consecutive = 0
+
+		for i = 1, #commandName do
+			if qIndex <= #query and string.sub(commandName, i, i) == string.sub(query, qIndex, qIndex) then
+				qIndex += 1
+				consecutive += 1
+				score += 20 + consecutive * 5
+			else
+				consecutive = 0
+			end
+		end
+
+		if qIndex > #query then
+			return 300 + score - (#commandName * 0.5)
+		end
+
 		return -math.huge
 	end
 
-	if commandName == query then
-		return 1000
-	end
+	local function getMatches(inputText)
+		local ranked = {}
 
-	if string.sub(commandName, 1, #query) == query then
-		return 800 - (#commandName - #query)
-	end
-
-	local startPos = string.find(commandName, query, 1, true)
-	if startPos then
-		return 600 - startPos
-	end
-
-	local score = 0
-	local qIndex = 1
-	local consecutive = 0
-
-	for i = 1, #commandName do
-		if qIndex <= #query and string.sub(commandName, i, i) == string.sub(query, qIndex, qIndex) then
-			qIndex += 1
-			consecutive += 1
-			score += 20 + consecutive * 5
-		else
-			consecutive = 0
-		end
-	end
-
-	if qIndex > #query then
-		return 300 + score - (#commandName * 0.5)
-	end
-
-	return -math.huge
-end
-
-local function getMatches(inputText)
-	local ranked = {}
-
-	for _, cmd in ipairs(Commands) do
-		local score = scoreCommand(inputText, cmd.Name)
-		if score > -math.huge then
-			table.insert(ranked, {
-				Command = cmd,
-				Score = score,
-			})
-		end
-	end
-
-	table.sort(ranked, function(a, b)
-		if a.Score == b.Score then
-			return #a.Command.Name < #b.Command.Name
-		end
-		return a.Score > b.Score
-	end)
-
-	local results = {}
-	for i = 1, math.min(MAX_SUGGESTIONS, #ranked) do
-		table.insert(results, ranked[i].Command)
-	end
-
-	return results
-end
-
-local function rebuildSuggestions(matches)
-	clearSuggestionEntries()
-
-	if #matches == 0 then
-		commandSuggester.Visible = false
-		currentBestMatch = nil
-		exampleSuggestionTemplate.Visible = false
-		return
-	end
-
-	currentBestMatch = matches[1]
-	commandSuggester.Visible = true
-
-	suggesterCommandName.Text = currentBestMatch.Name
-	suggesterCommandDescription.Text = currentBestMatch.Description
-
-	exampleSuggestionTemplate.Visible = true
-
-	for index, cmd in ipairs(matches) do
-		local entry
-		if index == 1 then
-			entry = exampleSuggestionTemplate
-		else
-			entry = exampleSuggestionTemplate:Clone()
-			entry.Name = "Suggestion_" .. index
-			entry.Visible = true
-			entry.Parent = container
+		for _, cmd in ipairs(Commands) do
+			local score = scoreCommand(inputText, cmd.Name)
+			if score > -math.huge then
+				table.insert(ranked, {
+					Command = cmd,
+					Score = score,
+				})
+			end
 		end
 
-		local entryLabel = entry:FindFirstChild("CommandName")
-		if entryLabel then
-			local displayName = cmd.Name
+		table.sort(ranked, function(a, b)
+			if a.Score == b.Score then
+				return #a.Command.Name < #b.Command.Name
+			end
+			return a.Score > b.Score
+		end)
 
-			if cmd.Name == "esp" then
-				displayName = "esp {distance}"
+		local results = {}
+		for i = 1, math.min(MAX_SUGGESTIONS, #ranked) do
+			table.insert(results, ranked[i].Command)
+		end
 
-			elseif cmd.Name == "tpwalk" then
-				displayName = "tpwalk {multiplier}"
+		return results
+	end
 
-			elseif cmd.Name == "blink" then
-				displayName = "blink {distance}"
+	local function rebuildSuggestions(matches)
+		clearSuggestionEntries()
 
-			elseif cmd.Name == "hitbox" then
-				displayName = "hitbox {player/all} {multiplier} {ignoreown}"
+		if #matches == 0 then
+			commandSuggester.Visible = false
+			currentBestMatch = nil
+			exampleSuggestionTemplate.Visible = false
+			return
+		end
 
-			elseif cmd.Name == "highlight" then
-				displayName = "highlight {player/all} {distance}"
+		currentBestMatch = matches[1]
+		commandSuggester.Visible = true
 
-			elseif cmd.Name == "esphighlight" then
-				displayName = "esphighlight {distance}"
+		suggesterCommandName.Text = currentBestMatch.Name
+		suggesterCommandDescription.Text = currentBestMatch.Description
 
-			elseif cmd.Name == "unesphighlight" then
-				displayName = "unesphighlight"
+		exampleSuggestionTemplate.Visible = true
 
-			elseif cmd.Name == "goto" then
-				displayName = "goto {player}"
-
-			elseif cmd.Name == "view" then
-				displayName = "view {player}"
-
-			elseif cmd.Name == "noclip" then
-				displayName = "noclip"
-
-			elseif cmd.Name == "clip" then
-				displayName = "clip"
-
-			elseif cmd.Name == "sit" then
-				displayName = "sit"
-
-			elseif cmd.Name == "unview" then
-				displayName = "unview"
-
-			elseif cmd.Name == "resethitboxes" then
-				displayName = "resethitboxes"
-
-			elseif cmd.Name == "unhighlight" then
-				displayName = "unhighlight"
-
-			elseif cmd.Name == "fov" then
-				displayName = "fov {amount}"
-
-			elseif cmd.Name == "resetfov" then
-				displayName = "resetfov"
-
-			elseif cmd.Name == "fly" then
-				displayName = "fly {speed}"
-
-			elseif cmd.Name == "unfly" then
-				displayName = "unfly"
-
-			elseif cmd.Name == "tracers" then
-				displayName = "tracers {distance}"
-
-			elseif cmd.Name == "untracers" then
-				displayName = "untracers"
-
-			elseif cmd.Name == "unfreecam" then
-				displayName = "unfreecam"
-
-			elseif cmd.Name == "walkspeed" then
-				displayName = "walkspeed {amount}"
-
-			elseif cmd.Name == "resetwalkspeed" then
-				displayName = "resetwalkspeed"
-
-			elseif cmd.Name == "jumpheight" then
-				displayName = "jumpheight {amount}"
-
-			elseif cmd.Name == "resetjumpheight" then
-				displayName = "resetjumpheight"
-
-			elseif cmd.Name == "fullbright" then
-				displayName = "fullbright"
-
-			elseif cmd.Name == "unfullbright" then
-				displayName = "unfullbright"
-
-			elseif cmd.Name == "freecam" then
-				displayName = "freecam {speed}"
-
-			elseif cmd.Name == "unfreecam" then
-				displayName = "unfreecam"
-
-			elseif cmd.Name == "maxzoom" then
-				displayName = "maxzoom {amount}"
-
-			elseif cmd.Name == "defaultzoom" then
-				displayName = "defaultzoom"
-
-			elseif cmd.Name == "destroy" then
-				displayName = "destroy"
+		for index, cmd in ipairs(matches) do
+			local entry
+			if index == 1 then
+				entry = exampleSuggestionTemplate
+			else
+				entry = exampleSuggestionTemplate:Clone()
+				entry.Name = "Suggestion_" .. index
+				entry.Visible = true
+				entry.Parent = container
 			end
 
-			entryLabel.Text = displayName
-			entryLabel.TextColor3 = (index == 1) and COLOR_SPOTLIGHT or COLOR_NORMAL
+			local entryLabel = entry:FindFirstChild("CommandName")
+			if entryLabel then
+				local displayName = cmd.Name
+
+				if cmd.Name == "esp" then
+					displayName = "esp {distance}"
+
+				elseif cmd.Name == "tpwalk" then
+					displayName = "tpwalk {multiplier}"
+
+				elseif cmd.Name == "blink" then
+					displayName = "blink {distance}"
+
+				elseif cmd.Name == "hitbox" then
+					displayName = "hitbox {player/team} {multiplier}"
+
+				elseif cmd.Name == "highlight" then
+					displayName = "highlight {player/all} {distance}"
+
+				elseif cmd.Name == "esphighlight" then
+					displayName = "esphighlight {distance}"
+
+				elseif cmd.Name == "unesphighlight" then
+					displayName = "unesphighlight"
+
+				elseif cmd.Name == "goto" then
+					displayName = "goto {player}"
+
+				elseif cmd.Name == "view" then
+					displayName = "view {player}"
+
+				elseif cmd.Name == "noclip" then
+					displayName = "noclip"
+
+				elseif cmd.Name == "clip" then
+					displayName = "clip"
+
+				elseif cmd.Name == "sit" then
+					displayName = "sit"
+
+				elseif cmd.Name == "unview" then
+					displayName = "unview"
+
+				elseif cmd.Name == "resethitboxes" then
+					displayName = "resethitboxes"
+
+				elseif cmd.Name == "unhighlight" then
+					displayName = "unhighlight"
+
+				elseif cmd.Name == "fov" then
+					displayName = "fov {amount}"
+
+				elseif cmd.Name == "resetfov" then
+					displayName = "resetfov"
+
+				elseif cmd.Name == "fly" then
+					displayName = "fly {speed}"
+
+				elseif cmd.Name == "unfly" then
+					displayName = "unfly"
+
+				elseif cmd.Name == "tracers" then
+					displayName = "tracers {distance}"
+
+				elseif cmd.Name == "untracers" then
+					displayName = "untracers"
+
+				elseif cmd.Name == "unfreecam" then
+					displayName = "unfreecam"
+
+				elseif cmd.Name == "walkspeed" then
+					displayName = "walkspeed {amount}"
+
+				elseif cmd.Name == "resetwalkspeed" then
+					displayName = "resetwalkspeed"
+
+				elseif cmd.Name == "jumpheight" then
+					displayName = "jumpheight {amount}"
+
+				elseif cmd.Name == "resetjumpheight" then
+					displayName = "resetjumpheight"
+
+				elseif cmd.Name == "fullbright" then
+					displayName = "fullbright"
+
+				elseif cmd.Name == "unfullbright" then
+					displayName = "unfullbright"
+
+				elseif cmd.Name == "freecam" then
+					displayName = "freecam {speed}"
+
+				elseif cmd.Name == "unfreecam" then
+					displayName = "unfreecam"
+
+				elseif cmd.Name == "maxzoom" then
+					displayName = "maxzoom {amount}"
+
+				elseif cmd.Name == "defaultzoom" then
+					displayName = "defaultzoom"
+
+			elseif cmd.Name == "hitboxtransparency" then
+				displayName = "hitboxtransparency {amount} {player/team/all}"
+
+				elseif cmd.Name == "destroy" then
+					displayName = "destroy"
+				end
+
+				entryLabel.Text = displayName
+				entryLabel.TextColor3 = (index == 1) and COLOR_SPOTLIGHT or COLOR_NORMAL
+			end
 		end
 	end
-end
 
-local function updateSuggestions()
-	local rawText = commandInput.Text
-	local text = getSearchText(rawText)
-	local commandWord = string.split(text," ")[1] or ""
+	local function updateSuggestions()
+		local rawText = commandInput.Text
+		local text = getSearchText(rawText)
+		local commandWord = string.split(text," ")[1] or ""
 
-	if text == "" then
-		resetSuggester()
-		return
+		if text == "" then
+			resetSuggester()
+			return
+		end
+
+		local matches = getMatches(commandWord)
+		rebuildSuggestions(matches)
+
+		if matches[1] and matches[1].Name == "esp" then
+			suggesterCommandName.Text = "esp {distance}"
+
+	    elseif matches[1] and matches[1].Name == "hitboxtransparency" then
+		    suggesterCommandName.Text = "hitboxtransparency {amount} {player/team/all}"
+
+		elseif matches[1] and matches[1].Name == "maxzoom" then
+			suggesterCommandName.Text = "maxzoom {amount}"
+
+		elseif matches[1] and matches[1].Name == "defaultzoom" then
+			suggesterCommandName.Text = "defaultzoom"
+
+		elseif matches[1] and matches[1].Name == "tpwalk" then
+			suggesterCommandName.Text = "tpwalk {multiplier}"
+
+		elseif matches[1] and matches[1].Name == "blink" then
+			suggesterCommandName.Text = "blink {distance}"
+
+		elseif matches[1] and matches[1].Name == "hitbox" then
+			suggesterCommandName.Text = "hitbox {player/team} {multiplier}"
+
+		elseif matches[1] and matches[1].Name == "highlight" then
+			suggesterCommandName.Text = "highlight {player/all} {distance}"
+
+		elseif matches[1] and matches[1].Name == "esphighlight" then
+			suggesterCommandName.Text = "esphighlight {distance}"
+
+		elseif matches[1] and matches[1].Name == "unesphighlight" then
+			suggesterCommandName.Text = "unesphighlight"
+
+		elseif matches[1] and matches[1].Name == "goto" then
+			suggesterCommandName.Text = "goto {player}"
+
+		elseif matches[1] and matches[1].Name == "view" then
+			suggesterCommandName.Text = "view {player}"
+
+		elseif matches[1] and matches[1].Name == "noclip" then
+			suggesterCommandName.Text = "noclip"
+
+		elseif matches[1] and matches[1].Name == "clip" then
+			suggesterCommandName.Text = "clip"
+
+		elseif matches[1] and matches[1].Name == "sit" then
+			suggesterCommandName.Text = "sit"
+
+		elseif matches[1] and matches[1].Name == "unview" then
+			suggesterCommandName.Text = "unview"
+
+		elseif matches[1] and matches[1].Name == "unhighlight" then
+			suggesterCommandName.Text = "unhighlight"
+
+		elseif matches[1] and matches[1].Name == "fov" then
+			suggesterCommandName.Text = "fov {amount}"
+
+		elseif matches[1] and matches[1].Name == "resetfov" then
+			suggesterCommandName.Text = "resetfov"
+
+		elseif matches[1] and matches[1].Name == "fly" then
+			suggesterCommandName.Text = "fly {speed}"
+
+		elseif matches[1] and matches[1].Name == "unfly" then
+			suggesterCommandName.Text = "unfly"
+
+		elseif matches[1] and matches[1].Name == "tracers" then
+			suggesterCommandName.Text = "tracers {distance}"
+
+		elseif matches[1] and matches[1].Name == "untracers" then
+			suggesterCommandName.Text = "untracers"
+
+		elseif matches[1] and matches[1].Name == "unfreecam" then
+			suggesterCommandName.Text = "unfreecam"
+
+		elseif matches[1] and matches[1].Name == "walkspeed" then
+			suggesterCommandName.Text = "walkspeed {amount}"
+
+		elseif matches[1] and matches[1].Name == "resetwalkspeed" then
+			suggesterCommandName.Text = "resetwalkspeed"
+
+		elseif matches[1] and matches[1].Name == "jumpheight" then
+			suggesterCommandName.Text = "jumpheight {amount}"
+
+		elseif matches[1] and matches[1].Name == "resetjumpheight" then
+			suggesterCommandName.Text = "resetjumpheight"
+
+		elseif matches[1] and matches[1].Name == "fullbright" then
+			suggesterCommandName.Text = "fullbright"
+
+		elseif matches[1] and matches[1].Name == "unfullbright" then
+			suggesterCommandName.Text = "unfullbright"
+
+		elseif matches[1] and matches[1].Name == "freecam" then
+			suggesterCommandName.Text = "freecam {speed}"
+
+		elseif matches[1] and matches[1].Name == "unfreecam" then
+			suggesterCommandName.Text = "unfreecam"
+
+		elseif matches[1] and matches[1].Name == "destroy" then
+			suggesterCommandName.Text = "destroy"
+		end
 	end
-
-	local matches = getMatches(commandWord)
-	rebuildSuggestions(matches)
-
-	if matches[1] and matches[1].Name == "esp" then
-		suggesterCommandName.Text = "esp {distance}"
-
-	elseif matches[1] and matches[1].Name == "maxzoom" then
-		suggesterCommandName.Text = "maxzoom {amount}"
-
-	elseif matches[1] and matches[1].Name == "defaultzoom" then
-		suggesterCommandName.Text = "defaultzoom"
-
-	elseif matches[1] and matches[1].Name == "tpwalk" then
-		suggesterCommandName.Text = "tpwalk {multiplier}"
-
-	elseif matches[1] and matches[1].Name == "blink" then
-		suggesterCommandName.Text = "blink {distance}"
-
-	elseif matches[1] and matches[1].Name == "hitbox" then
-		suggesterCommandName.Text = "hitbox {player/all} {multiplier} {ignoreown}"
-
-	elseif matches[1] and matches[1].Name == "highlight" then
-		suggesterCommandName.Text = "highlight {player/all} {distance}"
-
-	elseif matches[1] and matches[1].Name == "esphighlight" then
-		suggesterCommandName.Text = "esphighlight {distance}"
-
-	elseif matches[1] and matches[1].Name == "unesphighlight" then
-		suggesterCommandName.Text = "unesphighlight"
-
-	elseif matches[1] and matches[1].Name == "goto" then
-		suggesterCommandName.Text = "goto {player}"
-
-	elseif matches[1] and matches[1].Name == "view" then
-		suggesterCommandName.Text = "view {player}"
-
-	elseif matches[1] and matches[1].Name == "noclip" then
-		suggesterCommandName.Text = "noclip"
-
-	elseif matches[1] and matches[1].Name == "clip" then
-		suggesterCommandName.Text = "clip"
-
-	elseif matches[1] and matches[1].Name == "sit" then
-		suggesterCommandName.Text = "sit"
-
-	elseif matches[1] and matches[1].Name == "unview" then
-		suggesterCommandName.Text = "unview"
-
-	elseif matches[1] and matches[1].Name == "unhighlight" then
-		suggesterCommandName.Text = "unhighlight"
-
-	elseif matches[1] and matches[1].Name == "fov" then
-		suggesterCommandName.Text = "fov {amount}"
-
-	elseif matches[1] and matches[1].Name == "resetfov" then
-		suggesterCommandName.Text = "resetfov"
-
-	elseif matches[1] and matches[1].Name == "fly" then
-		suggesterCommandName.Text = "fly {speed}"
-
-	elseif matches[1] and matches[1].Name == "unfly" then
-		suggesterCommandName.Text = "unfly"
-
-	elseif matches[1] and matches[1].Name == "tracers" then
-		suggesterCommandName.Text = "tracers {distance}"
-
-	elseif matches[1] and matches[1].Name == "untracers" then
-		suggesterCommandName.Text = "untracers"
-
-	elseif matches[1] and matches[1].Name == "unfreecam" then
-		suggesterCommandName.Text = "unfreecam"
-
-	elseif matches[1] and matches[1].Name == "walkspeed" then
-		suggesterCommandName.Text = "walkspeed {amount}"
-
-	elseif matches[1] and matches[1].Name == "resetwalkspeed" then
-		suggesterCommandName.Text = "resetwalkspeed"
-
-	elseif matches[1] and matches[1].Name == "jumpheight" then
-		suggesterCommandName.Text = "jumpheight {amount}"
-
-	elseif matches[1] and matches[1].Name == "resetjumpheight" then
-		suggesterCommandName.Text = "resetjumpheight"
-
-	elseif matches[1] and matches[1].Name == "fullbright" then
-		suggesterCommandName.Text = "fullbright"
-
-	elseif matches[1] and matches[1].Name == "unfullbright" then
-		suggesterCommandName.Text = "unfullbright"
-
-	elseif matches[1] and matches[1].Name == "freecam" then
-		suggesterCommandName.Text = "freecam {speed}"
-
-	elseif matches[1] and matches[1].Name == "unfreecam" then
-		suggesterCommandName.Text = "unfreecam"
-
-	elseif matches[1] and matches[1].Name == "destroy" then
-		suggesterCommandName.Text = "destroy"
-	end
-end
 
 local function openMenu()
 	menuOpen = true
@@ -3250,7 +3441,7 @@ function startNametagSystem(renderDistance)
 		box.AlwaysOnTop = true
 		box.ZIndex = 10
 		box.Size = root.Size
-		box.Transparency = 0.85
+		box.Transparency = hitboxTransparency
 		box.Color3 = root.Color
 		box.Visible = true
 		box.Parent = root
@@ -3424,6 +3615,28 @@ end
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- STARTUP
 --////////////////////////////////////////////////////
+
+-- FORCE UI ABOVE EVERYTHING
+local screenGui = bg:FindFirstAncestorOfClass("ScreenGui")
+
+if screenGui then
+	screenGui.IgnoreGuiInset = true
+	screenGui.DisplayOrder = 999999
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+end
+
+-- FORCE HIGH ZINDEX FOR ALL UI
+local function forceTopLayer(guiObject)
+
+	for _, obj in ipairs(guiObject:GetDescendants()) do
+		if obj:IsA("GuiObject") then
+			obj.ZIndex = 1000
+		end
+	end
+
+end
+
+forceTopLayer(bg)
 
 resetSuggester()
 bg.Visible = false
