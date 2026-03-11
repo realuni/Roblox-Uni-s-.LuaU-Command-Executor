@@ -559,7 +559,7 @@ local function saveBinds()
 		keybinds = {},
 		togglebinds = {},
 		ghostbinds = {},
-			
+		cmdrbind = STATE.commandOpenKey.Name
 	}
 
 	for key, command in pairs(STATE.keybinds) do
