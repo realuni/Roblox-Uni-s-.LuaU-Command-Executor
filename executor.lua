@@ -509,11 +509,8 @@ local function loadBinds()
 	local toggleBinds = STATE.toggleBinds
 	local ghostBinds = STATE.ghostBinds
 
-	if data.cmdrbind then
-		local keyCode = Enum.KeyCode[data.cmdrbind]
-		if keyCode then
-			STATE.commandOpenKey = keyCode
-		end
+	if data.cmdrbind and Enum.KeyCode[data.cmdrbind] then
+		STATE.commandOpenKey = Enum.KeyCode[data.cmdrbind]
 	end
 
 	if data.keybinds then
@@ -3340,7 +3337,10 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	title3.Text = "Press '" .. displayName .. "' to Open the Menu"
 	originalTexts[title3] = title3.Text
 
-	saveBinds()
+	local ok = saveBinds()
+	if not ok then
+		warn("Failed to save cmdrbind")
+	end
 
 	helperBg.Visible = true
 	executorPrint("[SUCCESS] Command menu key set to:", displayName)
@@ -3881,16 +3881,18 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 
 		toggleMenu()
 
-		task.defer(function()
+		if STATE.menuOpen then
+			-- prevent the key from appearing
 			commandInput.Text = ""
 			commandInput.CursorPosition = -1
-			sanitizeCommandInput()
-			updateSuggestions()
 
-			if STATE.menuOpen then
+			task.defer(function()
+				commandInput.Text = ""
+				commandInput.CursorPosition = -1
 				commandInput:CaptureFocus()
-			end
-		end)
+				updateSuggestions()
+			end)
+		end
 
 		return
 	end
