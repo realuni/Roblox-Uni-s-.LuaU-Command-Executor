@@ -469,6 +469,7 @@ local STATE = {
 	inputEndedConnection = nil,
 	nametagRenderDistance = math.huge,
 	commandOpenKey = Enum.KeyCode.Semicolon,
+	pendingMenuOpenCharacter = nil,
 }
 
 local CONFIG = {
@@ -491,42 +492,47 @@ local CONFIG = {
 --////////////////////////////////////////////////////
 
 local function loadBinds()
-	if not readfile or not isfile or not isfile(BINDS_FILE) then
+	if type(readfile) ~= "function" or type(isfile) ~= "function" or not isfile(BINDS_FILE) then
 		return false
 	end
 
 	local ok, json = pcall(readfile, BINDS_FILE)
-	if not ok or not json then
+	if not ok or type(json) ~= "string" or json == "" then
 		return false
 	end
 
-	local ok2, data = pcall(HttpService.JSONDecode, HttpService, json)
-	if not ok2 or not data then
+	local ok2, data = pcall(function()
+		return HttpService:JSONDecode(json)
+	end)
+	if not ok2 or type(data) ~= "table" then
 		return false
 	end
 
-	local keybinds = STATE.keybinds
-	local toggleBinds = STATE.toggleBinds
-	local ghostBinds = STATE.ghostBinds
+	table.clear(STATE.keybinds)
+	table.clear(STATE.toggleBinds)
+	table.clear(STATE.ghostBinds)
 
-	if data.cmdrbind and Enum.KeyCode[data.cmdrbind] then
-		STATE.commandOpenKey = Enum.KeyCode[data.cmdrbind]
+	if type(data.cmdrbind) == "string" then
+		local savedCmdrKey = Enum.KeyCode[data.cmdrbind]
+		if savedCmdrKey then
+			STATE.commandOpenKey = savedCmdrKey
+		end
 	end
 
-	if data.keybinds then
+	if type(data.keybinds) == "table" then
 		for keyName, command in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode then
-				keybinds[keyCode] = command
+			if keyCode and type(command) == "string" then
+				STATE.keybinds[keyCode] = command
 			end
 		end
 	end
 
-	if data.togglebinds then
+	if type(data.togglebinds) == "table" then
 		for keyName, info in pairs(data.togglebinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode then
-				toggleBinds[keyCode] = {
+			if keyCode and type(info) == "table" then
+				STATE.toggleBinds[keyCode] = {
 					onCommand = info.onCommand,
 					offCommand = info.offCommand,
 					state = false
@@ -535,11 +541,11 @@ local function loadBinds()
 		end
 	end
 
-	if data.ghostbinds then
+	if type(data.ghostbinds) == "table" then
 		for keyName, ghostCommand in pairs(data.ghostbinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode then
-				ghostBinds[keyCode] = ghostCommand
+			if keyCode and type(ghostCommand) == "string" then
+				STATE.ghostBinds[keyCode] = ghostCommand
 			end
 		end
 	end
@@ -548,7 +554,7 @@ local function loadBinds()
 end
 
 local function saveBinds()
-	if not writefile then
+	if type(writefile) ~= "function" then
 		return false
 	end
 
@@ -574,8 +580,15 @@ local function saveBinds()
 		data.ghostbinds[key.Name] = ghostCommand
 	end
 
-	local json = HttpService:JSONEncode(data)
-	return pcall(writefile, BINDS_FILE, json)
+	local ok, json = pcall(function()
+		return HttpService:JSONEncode(data)
+	end)
+	if not ok or type(json) ~= "string" then
+		return false
+	end
+
+	local writeOk = pcall(writefile, BINDS_FILE, json)
+	return writeOk
 end
 
 local function saveWaypoints()
@@ -2040,12 +2053,25 @@ end
 
 local function sanitizeCommandInput()
 	local text = commandInput.Text
+
+	if STATE.pendingMenuOpenCharacter and text ~= "" then
+		local pending = STATE.pendingMenuOpenCharacter
+		local lowerText = string.lower(text)
+		local lowerPending = string.lower(pending)
+
+		if string.sub(lowerText, 1, #lowerPending) == lowerPending then
+			text = string.sub(text, #pending + 1)
+		end
+
+		STATE.pendingMenuOpenCharacter = nil
+	end
+
 	local cleaned = text:gsub("\t", "")
 
-	if cleaned ~= text then
+	if cleaned ~= commandInput.Text then
 		local oldCursor = commandInput.CursorPosition
 		commandInput.Text = cleaned
-		commandInput.CursorPosition = math.clamp(oldCursor or (#cleaned + 1),1,#cleaned+1)
+		commandInput.CursorPosition = math.clamp(oldCursor or (#cleaned + 1), 1, #cleaned + 1)
 	end
 end
 
@@ -2263,6 +2289,26 @@ local function getKeyDisplayName(keyCode)
 		return ";"
 	end
 	return keyCode.Name
+end
+
+local function getTypedCharacterForKeyCode(keyCode)
+	local ok, keyString = pcall(function()
+		return UserInputService:GetStringForKeyCode(keyCode)
+	end)
+
+	if ok and keyString and keyString ~= "" then
+		return keyString
+	end
+
+	if keyCode == Enum.KeyCode.Semicolon then
+		return ";"
+	end
+
+	if keyCode == Enum.KeyCode.Space then
+		return " "
+	end
+
+	return nil
 end
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -3337,22 +3383,19 @@ addCommand("cmdrbind", "Changes the key used to open the command menu, usage: cm
 	title3.Text = "Press '" .. displayName .. "' to Open the Menu"
 	originalTexts[title3] = title3.Text
 
-	local saveOk = saveBinds()
-	if not saveOk then
-		warn("Failed to save cmdrbind")
-	end
+	local saved = saveBinds()
 
-	if not bg.Visible then
-		bg.Visible = true
+	if saved then
+		executorPrint("[SUCCESS] Rebinded the cmdr open function to " .. displayName)
+	else
+		executorPrint("[FAIL] Rebind worked in-session, but could not save cmdrbind to file")
 	end
-	helperBg.Visible = true
-
-	executorPrint("[SUCCESS] Command menu key set to: " .. displayName)
 
 	if STATE.menuOpen then
 		commandInput.Text = ""
 		commandInput.CursorPosition = -1
 		updateSuggestions()
+
 		task.defer(function()
 			if STATE.menuOpen then
 				commandInput:CaptureFocus()
@@ -3601,6 +3644,7 @@ local function resetSuggester()
 end
 
 local function resetInputAndSuggestions()
+	STATE.pendingMenuOpenCharacter = nil
 	commandInput.Text = ""
 	commandInput.CursorPosition = -1
 	resetSuggester()
@@ -3888,6 +3932,8 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
+		STATE.pendingMenuOpenCharacter = getTypedCharacterForKeyCode(STATE.commandOpenKey)
+
 		toggleMenu()
 
 		if STATE.menuOpen then
@@ -3896,11 +3942,24 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			commandInput.CursorPosition = -1
 
 			task.defer(function()
+				if not STATE.menuOpen then
+					return
+				end
+
 				commandInput.Text = ""
 				commandInput.CursorPosition = -1
 				commandInput:CaptureFocus()
 				updateSuggestions()
+
+				task.defer(function()
+					if STATE.menuOpen then
+						sanitizeCommandInput()
+						updateSuggestions()
+					end
+				end)
 			end)
+		else
+			STATE.pendingMenuOpenCharacter = nil
 		end
 
 		return
