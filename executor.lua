@@ -462,21 +462,130 @@ local noclipConnection = nil
 local viewingPlayer = nil
 local fovConnection = nil
 local customFovValue = defaultCameraFov
-local customFovEnabled = false
-local customFovEnabled = false
+local customFovEnabled = false	
 local toggleBinds = {}
 local keybinds = {}
+local ghostBinds = {}
+local clickTeleportConnection = nil
+local clickTeleportKey = nil
+local clickTeleportActive = false
+local CLICKTP_MAX_DISTANCE = 2000
+local CLICKTP_MIN_Y = -1000 -- anti void protection
+local clickDeleteConnection = nil
+local clickDeleteKey = nil
+local clickDeleteActive = false
 local waypoints = {}
 local WAYPOINT_FILE = "waypoints.json"
+local BINDS_FILE = "binds.json"
 local HttpService = game:GetService("HttpService")
 local waypointMarkers = {}
 local waypointBillboards = {}
 local waypointRenderConnection = nil
 local waypointShowEnabled = false
+local startClickTeleport
+local stopClickTeleport
+local performClickTeleport
+local startClickDelete
+local stopClickDelete
+local performClickDelete
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- WAYPOINT STORAGE SYSTEM
 --////////////////////////////////////////////////////
+
+local function loadBinds()
+	if not readfile or not isfile then
+		return false
+	end
+
+	if not isfile(BINDS_FILE) then
+		return false
+	end
+
+	local success, json = pcall(function()
+		return readfile(BINDS_FILE)
+	end)
+
+	if not success or not json then
+		return false
+	end
+
+	local success2, data = pcall(function()
+		return HttpService:JSONDecode(json)
+	end)
+
+	if not success2 or not data then
+		return false
+	end
+
+	if data.keybinds then
+		for keyName, command in pairs(data.keybinds) do
+			local keyCode = Enum.KeyCode[keyName]
+			if keyCode then
+				keybinds[keyCode] = command
+			end
+		end
+	end
+
+	if data.togglebinds then
+		for keyName, info in pairs(data.togglebinds) do
+			local keyCode = Enum.KeyCode[keyName]
+			if keyCode then
+				toggleBinds[keyCode] = {
+					onCommand = info.onCommand,
+					offCommand = info.offCommand,
+					state = false
+				}
+			end
+		end
+	end
+
+	if data.ghostbinds then
+		for keyName, ghostCommand in pairs(data.ghostbinds) do
+			local keyCode = Enum.KeyCode[keyName]
+			if keyCode then
+				ghostBinds[keyCode] = ghostCommand
+			end
+		end
+	end
+
+	return true
+end
+
+local function saveBinds()
+	if not writefile then
+		return false
+	end
+
+	local data = {
+		keybinds = {},
+		togglebinds = {},
+		ghostbinds = {}
+	}
+
+	for key, command in pairs(keybinds) do
+		data.keybinds[key.Name] = command
+	end
+
+	for key, info in pairs(toggleBinds) do
+		data.togglebinds[key.Name] = {
+			onCommand = info.onCommand,
+			offCommand = info.offCommand
+		}
+	end
+
+	for key, ghostCommand in pairs(ghostBinds) do
+		data.ghostbinds[key.Name] = ghostCommand
+	end
+
+	local json = HttpService:JSONEncode(data)
+
+	local success = pcall(function()
+		writefile(BINDS_FILE, json)
+	end)
+
+	return success
+end
 
 local function saveWaypoints()
 	-- Check if writefile is available (executor API)
@@ -851,7 +960,12 @@ local function startFreecam(speed)
 		if not freecamEnabled then
 			return
 		end
-
+		-- CLICK TELEPORT EXECUTION
+		if clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if UserInputService:IsKeyDown(clickTeleportKey) then
+				performClickTeleport()
+			end
+		end
 		if gameProcessed then
 			return
 		end
@@ -868,7 +982,6 @@ local function startFreecam(speed)
 			return
 		end
 
-		local currentCamera = workspace.CurrentCamera
 		local currentCamera = workspace.CurrentCamera
 		if not currentCamera then
 			stopFreecam()
@@ -3118,6 +3231,27 @@ local Commands = {
 				return
 			end
 
+			local keyCode = Enum.KeyCode[keyName]
+
+			if not keyCode then
+				print("[FAIL] Invalid key:",keyName)
+				return
+			end
+
+			-- GHOST COMMAND: clickteleport
+			if string.lower(commandText) == "clickteleport" then
+				ghostBinds[keyCode] = "clickteleport"
+				print("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
+				return
+			end
+
+			-- GHOST COMMAND: clickdelete
+			if string.lower(commandText) == "clickdelete" then
+				ghostBinds[keyCode] = "clickdelete"
+				print("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
+				return
+			end
+
 			-- Prevent binding bind-related commands
 			local lowerCommand = string.lower(commandText)
 			if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
@@ -3133,6 +3267,7 @@ local Commands = {
 			end
 
 			keybinds[keyCode] = commandText
+			saveBinds()
 
 			print("[SUCCESS] Bound key",keyName,"to command:",commandText)
 
@@ -3156,13 +3291,15 @@ local Commands = {
 				return
 			end
 
-			if not keybinds[keyCode] and not toggleBinds[keyCode] then
-				print("[FAIL] No bind found for key:",keyName)
+			if not keybinds[keyCode] and not toggleBinds[keyCode] and not ghostBinds[keyCode] then
+				print("[FAIL] No bind found for key:", keyName)
 				return
 			end
 
 			keybinds[keyCode] = nil
 			toggleBinds[keyCode] = nil
+			ghostBinds[keyCode] = nil
+			saveBinds()
 
 			print("[SUCCESS] Unbound key:",keyName)
 
@@ -3201,6 +3338,11 @@ local Commands = {
 				createLine(key.Name.." -> "..command)
 			end
 
+			for key,ghost in pairs(ghostBinds) do
+				found = true
+				createLine(key.Name.." -> "..ghost.." (ghost)")
+			end
+
 			for key,data in pairs(toggleBinds) do
 				found = true
 				createLine(key.Name.." -> "..data.onCommand.." / "..data.offCommand)
@@ -3222,6 +3364,8 @@ local Commands = {
 
 			table.clear(keybinds)
 			table.clear(toggleBinds)
+			table.clear(ghostBinds)
+			saveBinds()
 
 			print("[SUCCESS] All binds cleared")
 
@@ -3307,6 +3451,8 @@ local Commands = {
 				offCommand = offCommand,
 				state = false
 			}
+
+			saveBinds()
 
 			print("[SUCCESS] Toggle bind created:",keyName,"->",matchedCommand)
 
@@ -3547,6 +3693,20 @@ local Commands = {
 
 		end,
 	},
+	{
+		Name = "clickteleport",
+		Description = "Ghost command - Teleports you to where you click when holding the bound key. Must be bound using the bind command.",
+		Execute = function()
+			print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
+		end,
+	},
+	{
+		Name = "clickdelete",
+		Description = "Ghost command - Deletes the object you click when holding the bound key. Must be bound using the bind command.",
+		Execute = function()
+			print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
+		end,
+	},
 }
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -3602,6 +3762,10 @@ local function getCommandDisplayNameForHelp(cmd)
 		return "waypointdelete {name}"
 	elseif cmd.Name == "gotowaypoint" then
 		return "gotowaypoint {name}"
+	elseif cmd.Name == "clickteleport" then
+		return "clickteleport [ghost - bind required]"
+	elseif cmd.Name == "clickdelete" then
+		return "clickdelete [ghost - bind required]"
 	else
 		return cmd.Name
 	end
@@ -4092,6 +4256,12 @@ local function rebuildSuggestions(matches)
 
 			elseif cmd.Name == "playerinfo" then
 				displayName = "playerinfo {player}"
+
+			elseif cmd.Name == "clickteleport" then
+				displayName = "clickteleport [ghost - bind required]"
+
+			elseif cmd.Name == "clickdelete" then
+				displayName = "clickdelete [ghost - bind required]"
 			end
 
 			entryLabel.Text = displayName
@@ -4232,6 +4402,12 @@ local function updateSuggestions()
 
 	elseif matches[1] and matches[1].Name == "playerinfo" then
 		suggesterCommandName.Text = "playerinfo {player}"
+
+	elseif matches[1] and matches[1].Name == "clickteleport" then
+		suggesterCommandName.Text = "clickteleport [ghost - bind required]"
+
+	elseif matches[1] and matches[1].Name == "clickdelete" then
+		suggesterCommandName.Text = "clickteleport [ghost - bind required]"
 	end
 end
 
@@ -4384,6 +4560,22 @@ inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameP
 	-- KEYBINDS
 	if not gameProcessed and (not commandInput or not commandInput:IsFocused()) then
 
+		-- CLICK TELEPORT
+		if clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if clickTeleportKey and UserInputService:IsKeyDown(clickTeleportKey) then
+				performClickTeleport()
+			end
+			return
+		end
+
+		-- CLICK DELETE
+		if clickDeleteActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if clickDeleteKey and UserInputService:IsKeyDown(clickDeleteKey) then
+				performClickDelete()
+			end
+			return
+		end
+
 		local key = input.KeyCode
 
 		-- TOGGLE BINDS
@@ -4398,6 +4590,20 @@ inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameP
 			end
 			return
 		end
+
+		-- GHOST BINDS
+		local ghost = ghostBinds[key]
+		if ghost then
+
+			if ghost == "clickteleport" then
+				startClickTeleport(key)
+			elseif ghost == "clickdelete" then
+				startClickDelete(key)
+			end
+
+			return
+		end
+
 
 		-- NORMAL BINDS
 		local boundCommand = keybinds[key]
@@ -4464,6 +4670,10 @@ inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameP
 				fillText = "esphighlight "
 			elseif currentBestMatch.Name == "playerinfo" then
 				fillText = "playerinfo "
+			elseif currentBestMatch.Name == "clickteleport" then
+				fillText = "clickteleport"
+			elseif currentBestMatch.Name == "clickdelete" then
+				fillText = "clickdelete"
 			end
 
 			commandInput.Text = fillText
@@ -4477,6 +4687,18 @@ inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameP
 	if gameProcessed then
 		return
 	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+	if input.KeyCode == clickTeleportKey then
+		stopClickTeleport()
+	end
+
+	if input.KeyCode == clickDeleteKey then
+		stopClickDelete()
+	end
+
 end)
 
 --////////////////////////////////////////////////////
@@ -4859,6 +5081,85 @@ local function startGlobalPlayerTracking()
 
 end
 
+--////////////////////////////////////////////////////
+-- CLICK TELEPORT SYSTEM (GHOST COMMAND)
+--////////////////////////////////////////////////////
+
+function performClickTeleport()
+
+	local mouse = LocalPlayer:GetMouse()
+	local character = LocalPlayer.Character
+	if not character then return end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+
+	local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {character}
+
+	local result = workspace:Raycast(ray.Origin, ray.Direction * CLICKTP_MAX_DISTANCE, params)
+	if not result then return end
+
+	local pos = result.Position
+
+	if pos.Y < CLICKTP_MIN_Y then
+		print("[FAIL] Teleport blocked (void protection)")
+		return
+	end
+
+	root.CFrame = CFrame.new(pos + Vector3.new(0,3,0))
+
+end
+
+
+function startClickTeleport(keyCode)
+	clickTeleportKey = keyCode
+	clickTeleportActive = true
+end
+
+
+function stopClickTeleport()
+	clickTeleportActive = false
+end
+
+-- CLICK DELETE SYSTEM (GHOST COMMAND)
+--////////////////////////////////////////////////////
+
+function performClickDelete()
+	local mouse = LocalPlayer:GetMouse()
+	local camera = workspace.CurrentCamera
+	if not camera then return end
+
+	local ray = camera:ScreenPointToRay(mouse.X, mouse.Y)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {LocalPlayer.Character}
+
+	local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, params)
+	if not result then return end
+
+	local target = result.Instance
+	if target and target.Parent then
+		target:Destroy()
+		print("[SUCCESS] Deleted:", target.Name)
+	end
+end
+
+function startClickDelete(keyCode)
+	clickDeleteKey = keyCode
+	clickDeleteActive = true
+end
+
+function stopClickDelete()
+	clickDeleteActive = false
+end
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- STARTUP
 --////////////////////////////////////////////////////
@@ -4897,6 +5198,13 @@ if loadWaypoints() then
 	print("[SUCCESS] Loaded saved waypoints from file")
 else
 	print("[INFO] No saved waypoints found or executor API unavailable")
+end
+
+-- Load saved binds
+if loadBinds() then
+	print("[SUCCESS] Loaded saved binds from file")
+else
+	print("[INFO] No saved binds found or executor API unavailable")
 end
 
 task.spawn(playWelcomeSequence)
