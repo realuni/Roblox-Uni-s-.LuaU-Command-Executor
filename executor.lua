@@ -9,6 +9,7 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local BINDS_FILE = "executor_binds.json"
 local WAYPOINT_FILE = "executor_waypoints.json"
+local print = print
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- UI CREATION
@@ -468,8 +469,6 @@ local STATE = {
 	globalCharacterConnections = {},
 	inputEndedConnection = nil,
 	nametagRenderDistance = math.huge,
-	commandOpenKey = Enum.KeyCode.Semicolon,
-	pendingMenuOpenCharacter = nil,
 }
 
 local CONFIG = {
@@ -492,40 +491,38 @@ local CONFIG = {
 --////////////////////////////////////////////////////
 
 local function loadBinds()
-	if type(readfile) ~= "function" or type(isfile) ~= "function" or not isfile(BINDS_FILE) then
+	if not readfile or not isfile or not isfile(BINDS_FILE) then
 		return false
 	end
 
 	local ok, json = pcall(readfile, BINDS_FILE)
-	if not ok or type(json) ~= "string" or json == "" then
+	if not ok or not json then
 		return false
 	end
 
-	local ok2, data = pcall(function()
-		return HttpService:JSONDecode(json)
-	end)
-	if not ok2 or type(data) ~= "table" then
+	local ok2, data = pcall(HttpService.JSONDecode, HttpService, json)
+	if not ok2 or not data then
 		return false
 	end
 
-	table.clear(STATE.keybinds)
-	table.clear(STATE.toggleBinds)
-	table.clear(STATE.ghostBinds)
+	local keybinds = STATE.keybinds
+	local toggleBinds = STATE.toggleBinds
+	local ghostBinds = STATE.ghostBinds
 
-	if type(data.keybinds) == "table" then
+	if data.keybinds then
 		for keyName, command in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode and type(command) == "string" then
-				STATE.keybinds[keyCode] = command
+			if keyCode then
+				keybinds[keyCode] = command
 			end
 		end
 	end
 
-	if type(data.togglebinds) == "table" then
+	if data.togglebinds then
 		for keyName, info in pairs(data.togglebinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode and type(info) == "table" then
-				STATE.toggleBinds[keyCode] = {
+			if keyCode then
+				toggleBinds[keyCode] = {
 					onCommand = info.onCommand,
 					offCommand = info.offCommand,
 					state = false
@@ -534,11 +531,11 @@ local function loadBinds()
 		end
 	end
 
-	if type(data.ghostbinds) == "table" then
+	if data.ghostbinds then
 		for keyName, ghostCommand in pairs(data.ghostbinds) do
 			local keyCode = Enum.KeyCode[keyName]
-			if keyCode and type(ghostCommand) == "string" then
-				STATE.ghostBinds[keyCode] = ghostCommand
+			if keyCode then
+				ghostBinds[keyCode] = ghostCommand
 			end
 		end
 	end
@@ -547,7 +544,7 @@ local function loadBinds()
 end
 
 local function saveBinds()
-	if type(writefile) ~= "function" then
+	if not writefile then
 		return false
 	end
 
@@ -572,15 +569,8 @@ local function saveBinds()
 		data.ghostbinds[key.Name] = ghostCommand
 	end
 
-	local ok, json = pcall(function()
-		return HttpService:JSONEncode(data)
-	end)
-	if not ok or type(json) ~= "string" then
-		return false
-	end
-
-	local writeOk = pcall(writefile, BINDS_FILE, json)
-	return writeOk
+	local json = HttpService:JSONEncode(data)
+	return pcall(writefile, BINDS_FILE, json)
 end
 
 local function saveWaypoints()
@@ -915,7 +905,6 @@ local populateHelpList
 local clearHelpEntries
 local hideHelpList
 local closeMenu
-local updateSuggestions
 
 local function getCubeHitboxSize(originalSize, multiplier)
 	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
@@ -993,30 +982,68 @@ local function stopFreecam()
 	end
 
 	local camera = workspace.CurrentCamera
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
 	if camera then
-		camera.CameraType = STATE.freecamOriginalCameraType or Enum.CameraType.Custom
-		camera.CameraSubject = STATE.freecamOriginalCameraSubject
-		camera.CFrame = STATE.freecamOriginalCameraCFrame or camera.CFrame
-		camera.Focus = STATE.freecamOriginalCameraFocus or camera.Focus
+		camera.CameraType = Enum.CameraType.Custom
+		camera.CameraSubject = humanoid
 	end
 
 	UserInputService.MouseBehavior = STATE.freecamOriginalMouseBehavior or Enum.MouseBehavior.Default
 	UserInputService.MouseIconEnabled = STATE.freecamOriginalMouseIconEnabled == nil and true or STATE.freecamOriginalMouseIconEnabled
 
 	unfreezeCharacterFromFreecam()
+
+	STATE.freecamOriginalCameraType = nil
+	STATE.freecamOriginalCameraSubject = nil
+	STATE.freecamOriginalCameraCFrame = nil
+	STATE.freecamOriginalCameraFocus = nil
+	STATE.freecamPosition = nil
+end
+
+local function getFreecamCharacterStartCFrame()
+	local camera = workspace.CurrentCamera
+	local character = LocalPlayer.Character
+
+	if not camera then
+		return nil
+	end
+
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local head = character and character:FindFirstChild("Head")
+
+	local startPosition
+	if head then
+		startPosition = head.Position
+	elseif root then
+		startPosition = root.Position + Vector3.new(0, 2, 0)
+	else
+		startPosition = camera.CFrame.Position
+	end
+
+	local lookVector = camera.CFrame.LookVector
+	return CFrame.lookAt(startPosition, startPosition + lookVector)
 end
 
 local function startFreecam(speed)
-	stopFreecam()
-
 	if STATE.menuOpen then
 		closeMenu()
+	end
+
+	if STATE.freecamEnabled then
+		return
 	end
 
 	speed = tonumber(speed) or 50
 
 	local camera = workspace.CurrentCamera
 	if not camera then
+		return
+	end
+
+	local startCFrame = getFreecamCharacterStartCFrame()
+	if not startCFrame then
 		return
 	end
 
@@ -1029,22 +1056,21 @@ local function startFreecam(speed)
 	STATE.freecamOriginalCameraFocus = camera.Focus
 	STATE.freecamOriginalMouseBehavior = UserInputService.MouseBehavior
 	STATE.freecamOriginalMouseIconEnabled = UserInputService.MouseIconEnabled
-	-- reset freecam start position to current camera
-	STATE.freecamPosition = camera.CFrame.Position
-	STATE.freecamYaw = math.atan2(-camera.CFrame.LookVector.X, -camera.CFrame.LookVector.Z)
-	STATE.freecamPitch = math.asin(camera.CFrame.LookVector.Y)
+
+	STATE.freecamPosition = startCFrame.Position
+	STATE.freecamYaw = math.atan2(-startCFrame.LookVector.X, -startCFrame.LookVector.Z)
+	STATE.freecamPitch = math.asin(startCFrame.LookVector.Y)
 
 	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CFrame = startCFrame
+	camera.Focus = startCFrame * CFrame.new(0, 0, -512)
+
 	UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
 	UserInputService.MouseIconEnabled = false
 
 	STATE.freecamMouseConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
 		if not STATE.freecamEnabled then
 			return
-		end
-
-		if STATE.clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 and UserInputService:IsKeyDown(STATE.clickTeleportKey) then
-			performClickTeleport()
 		end
 
 		if gameProcessed then
@@ -1063,8 +1089,8 @@ local function startFreecam(speed)
 			return
 		end
 
-		camera = workspace.CurrentCamera
-		if not camera then
+		local currentCamera = workspace.CurrentCamera
+		if not currentCamera then
 			stopFreecam()
 			return
 		end
@@ -1108,11 +1134,12 @@ local function startFreecam(speed)
 		end
 
 		if moveDirection.Magnitude > 0 then
-			STATE.freecamPosition += moveDirection.Unit * (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and speed * 2 or speed) * dt
+			local currentSpeed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and (speed * 2) or speed
+			STATE.freecamPosition += moveDirection.Unit * currentSpeed * dt
 		end
 
-		camera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
-		camera.Focus = camera.CFrame * CFrame.new(0, 0, -512)
+		currentCamera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
+		currentCamera.Focus = currentCamera.CFrame * CFrame.new(0, 0, -512)
 	end)
 end
 
@@ -1445,8 +1472,8 @@ end
 local function getCharacterRoot(character)
 	return character and (
 		character:FindFirstChild("HumanoidRootPart")
-		or character:FindFirstChild("UpperTorso")
-		or character:FindFirstChild("Torso")
+			or character:FindFirstChild("UpperTorso")
+			or character:FindFirstChild("Torso")
 	) or nil
 end
 
@@ -2045,25 +2072,12 @@ end
 
 local function sanitizeCommandInput()
 	local text = commandInput.Text
+	local cleaned = text:gsub(";", ""):gsub("\t", "")
 
-	if STATE.pendingMenuOpenCharacter and text ~= "" then
-		local pending = STATE.pendingMenuOpenCharacter
-		local lowerText = string.lower(text)
-		local lowerPending = string.lower(pending)
-
-		if string.sub(lowerText, 1, #lowerPending) == lowerPending then
-			text = string.sub(text, #pending + 1)
-		end
-
-		STATE.pendingMenuOpenCharacter = nil
-	end
-
-	local cleaned = text:gsub("\t", "")
-
-	if cleaned ~= commandInput.Text then
+	if cleaned ~= text then
 		local oldCursor = commandInput.CursorPosition
 		commandInput.Text = cleaned
-		commandInput.CursorPosition = math.clamp(oldCursor or (#cleaned + 1), 1, #cleaned + 1)
+		commandInput.CursorPosition = math.clamp(oldCursor or (#cleaned + 1),1,#cleaned+1)
 	end
 end
 
@@ -2224,128 +2238,65 @@ local function createPrintHelper(text, shouldFade)
 		label.RichText = true
 		label.Text = string.format(
 			"<font color=\"rgb(202,177,53)\">[EXEC]</font> <font color=\"rgb(227,227,227)\">%s</font>",
-			text
+			tostring(text)
 		)
 	end
 
-	-- FORCE helper UI visible
 	helperBg.Visible = true
-	bg.Visible = true
-
 	activePrintHelpers[printHelperCounter] = entry
 
 	if shouldFade ~= false then
 		local helperId = printHelperCounter
-
 		task.spawn(function()
 			task.wait(5)
 
-			local entry = activePrintHelpers[helperId]
-			if entry and entry.Parent then
+			local helperEntry = activePrintHelpers[helperId]
+			if helperEntry and helperEntry.Parent then
 				local fadeTween = TweenService:Create(
-					entry,
+					helperEntry,
 					TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 					{BackgroundTransparency = 1}
 				)
 				fadeTween:Play()
 				fadeTween.Completed:Wait()
 
-				entry = activePrintHelpers[helperId]
-				if entry and entry.Parent then
-					entry:Destroy()
+				helperEntry = activePrintHelpers[helperId]
+				if helperEntry and helperEntry.Parent then
+					helperEntry:Destroy()
 				end
 			end
 
 			activePrintHelpers[helperId] = nil
 		end)
 	end
+
+	return printHelperCounter
 end
+
+-- IMPORTANT:
+-- save the CURRENT LOCAL print first, then override the LOCAL print itself
+local originalPrint = print
 
 local function executorPrint(...)
-	local args = {...}
+	local args = { ... }
+	local parts = table.create(#args)
 
-	local text = ""
 	for i = 1, #args do
-		text ..= (i > 1 and " " or "") .. tostring(args[i])
+		parts[i] = tostring(args[i])
 	end
 
-	-- console output
-	warn(text)
+	local text = table.concat(parts, " ")
 
-	-- ensure helper UI visible
-	bg.Visible = true
-	helperBg.Visible = true
+	-- normal console output
+	originalPrint(...)
 
-	-- create a fresh UI element instead of cloning template
-	local entry = Instance.new("Frame")
-	entry.BackgroundTransparency = 0.45
-	entry.BorderSizePixel = 0
-	entry.Size = UDim2.new(1,0,0,28)
-	entry.Parent = helperScrollingFrame
-
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.BorderSizePixel = 0
-	label.Size = UDim2.new(1,-16,1,0)
-	label.Position = UDim2.new(0,8,0,0)
-	label.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Center
-	label.TextSize = 14
-	label.RichText = true
-	label.TextColor3 = Color3.fromRGB(227,227,227)
-
-	label.Text = string.format(
-		"<font color=\"rgb(202,177,53)\">[EXEC]</font> %s",
-		text
-	)
-
-	label.Parent = entry
-
-	-- auto fade
-	task.spawn(function()
-		task.wait(5)
-
-		if entry and entry.Parent then
-			local tween = TweenService:Create(
-				entry,
-				TweenInfo.new(0.3),
-				{BackgroundTransparency = 1}
-			)
-
-			tween:Play()
-			tween.Completed:Wait()
-
-			if entry and entry.Parent then
-				entry:Destroy()
-			end
-		end
-	end)
+	-- executor UI output
+	createPrintHelper(text)
 end
-	
---\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
--- HELPERS 2
---////////////////////////////////////////////////////
 
-local function getTypedCharacterForKeyCode(keyCode)
-	local ok, keyString = pcall(function()
-		return UserInputService:GetStringForKeyCode(keyCode)
-	end)
-
-	if ok and keyString and keyString ~= "" then
-		return keyString
-	end
-
-	if keyCode == Enum.KeyCode.Semicolon then
-		return ";"
-	end
-
-	if keyCode == Enum.KeyCode.Space then
-		return " "
-	end
-
-	return nil
-end
+-- override BOTH local print and global print
+print = executorPrint
+_G.print = executorPrint
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- COMMANDS
@@ -2367,46 +2318,46 @@ addCommand("esp", "Displays a customizable nametag above every player displaying
 	else
 		distance = tonumber(distance)
 		if not distance then
-			executorPrint("[FAIL] Invalid distance value for esp command")
+			print("[FAIL] Invalid distance value for esp command")
 			return
 		end
 	end
 
-	executorPrint("[SUCCESS] Nametag render distance set to:", distance == math.huge and "infinite" or distance, "studs")
+	print("[SUCCESS] Nametag render distance set to:", distance == math.huge and "infinite" or distance, "studs")
 	startNametagSystem(distance)
 end)
 
 addCommand("unesp", "Turns off the customizable nametags above every player displaying their username, health and distance from you in studs.", function()
-	executorPrint("[SUCCESS] Nametag system disabled")
+	print("[SUCCESS] Nametag system disabled")
 	stopNametagSystem()
 end)
 
 addCommand("tpwalk", "Makes your character walk faster without speeding up any animations, usage: 'tpwalk 0.25' for a slight boost", function(multiplier)
 	multiplier = tonumber(multiplier)
 	if not multiplier then
-		executorPrint("[FAIL] Invalid tpwalk multiplier value")
+		print("[FAIL] Invalid tpwalk multiplier value")
 		return
 	end
 
-	executorPrint("[SUCCESS] Tpwalk enabled with multiplier:", multiplier)
+	print("[SUCCESS] Tpwalk enabled with multiplier:", multiplier)
 	startTpWalk(multiplier)
 end)
 
 addCommand("untpwalk", "Removes any previously granted 'tpwalk' functions to the players character if there were any", function()
-	executorPrint("[SUCCESS] Tpwalk disabled")
+	print("[SUCCESS] Tpwalk disabled")
 	stopTpWalk()
 end)
 
 addCommand("blink", "Teleports you x studs towards the direction your character is looking at.", function(distance)
 	distance = tonumber(distance)
 	if not distance then
-		executorPrint("[FAIL] Invalid blink distance value")
+		print("[FAIL] Invalid blink distance value")
 		return
 	end
 
 	local rootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not rootPart then
-		executorPrint("[FAIL] HumanoidRootPart not found for blink")
+		print("[FAIL] HumanoidRootPart not found for blink")
 		return
 	end
 
@@ -2414,33 +2365,33 @@ addCommand("blink", "Teleports you x studs towards the direction your character 
 	local flatForward = Vector3.new(lookVector.X, 0, lookVector.Z)
 
 	if flatForward.Magnitude <= 0 then
-		executorPrint("[FAIL] Invalid look direction for blink")
+		print("[FAIL] Invalid look direction for blink")
 		return
 	end
 
 	flatForward = flatForward.Unit
 	rootPart.CFrame = CFrame.new(rootPart.Position + flatForward * distance, rootPart.Position + flatForward * (distance + 1))
 
-	executorPrint("[SUCCESS] Teleported", distance, "studs forward")
+	print("[SUCCESS] Teleported", distance, "studs forward")
 end)
 
 addCommand("hitbox", "Multiplies the hitbox area of the selected player or team, usage: 'hitbox username 2' or 'hitbox Engineering Department 2'", function(...)
 	local args = {...}
 	if #args < 2 then
-		executorPrint("[FAIL] Usage: hitbox {player/team} {multiplier}")
+		print("[FAIL] Usage: hitbox {player/team} {multiplier}")
 		return
 	end
 
 	local multiplier = tonumber(args[#args])
 	if not multiplier then
-		executorPrint("[FAIL] Invalid hitbox multiplier value")
+		print("[FAIL] Invalid hitbox multiplier value")
 		return
 	end
 
 	args[#args] = nil
 	local targetName = table.concat(args, " ")
 	if targetName == "" then
-		executorPrint("[FAIL] Missing target name or team")
+		print("[FAIL] Missing target name or team")
 		return
 	end
 
@@ -2458,7 +2409,7 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 
 			STATE.hitboxSystemEnabled = true
 			refreshAllActiveHitboxes()
-			executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to team:", team.Name)
+			print("[SUCCESS] Applied hitbox multiplier", multiplier, "to team:", team.Name)
 			return
 		end
 	end
@@ -2474,35 +2425,35 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 
 		STATE.hitboxSystemEnabled = true
 		refreshAllActiveHitboxes()
-		executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to all players")
+		print("[SUCCESS] Applied hitbox multiplier", multiplier, "to all players")
 		return
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		executorPrint("[FAIL] Player or team not found:", targetName)
+		print("[FAIL] Player or team not found:", targetName)
 		return
 	end
 
 	STATE.hitboxSystemEnabled = true
 	applyHitboxToPlayer(targetPlayer, multiplier)
-	executorPrint("[SUCCESS] Applied hitbox multiplier", multiplier, "to player:", targetPlayer.Name)
+	print("[SUCCESS] Applied hitbox multiplier", multiplier, "to player:", targetPlayer.Name)
 end)
 
 addCommand("resethitboxes", "Removes any previously expanded hitboxes to player characters if there were any", function()
 	resetAllHitboxes()
-	executorPrint("[SUCCESS] Reset all expanded hitboxes")
+	print("[SUCCESS] Reset all expanded hitboxes")
 end)
 
 addCommand("respawn", "Resets your roblox character - Sets your humanoid health to 0", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		executorPrint("[FAIL] Humanoid not found for respawn")
+		print("[FAIL] Humanoid not found for respawn")
 		return
 	end
 
 	humanoid.Health = 0
-	executorPrint("[SUCCESS] Character respawned")
+	print("[SUCCESS] Character respawned")
 end)
 
 addCommand("rejoin", "Rejoins the same server and re-executes the script if supported by your executor", function()
@@ -2523,7 +2474,7 @@ end)
 addCommand("highlight", "Highlights the specified players making them visible through walls, and displaying their animations in real time", function(targetName, distance)
 	targetName = tostring(targetName or "")
 	if targetName == "" then
-		executorPrint("[FAIL] Missing target name for highlight")
+		print("[FAIL] Missing target name for highlight")
 		return
 	end
 
@@ -2532,7 +2483,7 @@ addCommand("highlight", "Highlights the specified players making them visible th
 	else
 		distance = tonumber(distance)
 		if not distance then
-			executorPrint("[FAIL] Invalid highlight distance value")
+			print("[FAIL] Invalid highlight distance value")
 			return
 		end
 	end
@@ -2551,7 +2502,7 @@ addCommand("highlight", "Highlights the specified players making them visible th
 			end
 		end
 
-		executorPrint("[SUCCESS] Applied highlights to all players with distance:", distance == math.huge and "infinite" or distance)
+		print("[SUCCESS] Applied highlights to all players with distance:", distance == math.huge and "infinite" or distance)
 		return
 	end
 
@@ -2563,40 +2514,40 @@ addCommand("highlight", "Highlights the specified players making them visible th
 				end
 			end
 
-			executorPrint("[SUCCESS] Applied highlights to team:", team.Name)
+			print("[SUCCESS] Applied highlights to team:", team.Name)
 			return
 		end
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		executorPrint("[FAIL] Player or team not found:", targetName)
+		print("[FAIL] Player or team not found:", targetName)
 		return
 	end
 
 	highlightPlayer(targetPlayer)
-	executorPrint("[SUCCESS] Applied highlight to player:", targetPlayer.Name)
+	print("[SUCCESS] Applied highlight to player:", targetPlayer.Name)
 end)
 
 addCommand("unhighlight", "Removes any previously added highlight effects to every player if there were any", function()
 	resetAllHighlights()
-	executorPrint("[SUCCESS] Removed all highlights")
+	print("[SUCCESS] Removed all highlights")
 end)
 
 addCommand("help", "Shows all of the executable modules and briefly explains how they all work", function()
-	executorPrint("[SUCCESS] Help list displayed")
+	print("[SUCCESS] Help list displayed")
 	populateHelpList()
 end)
 
 addCommand("goto", "Teleports your player to the specified player, usage: 'goto username'", function(username)
 	if not username or username == "" then
-		executorPrint("[FAIL] Missing username for goto command")
+		print("[FAIL] Missing username for goto command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		executorPrint("[FAIL] Player not found:", username)
+		print("[FAIL] Player not found:", username)
 		return
 	end
 
@@ -2604,46 +2555,46 @@ addCommand("goto", "Teleports your player to the specified player, usage: 'goto 
 	local targetRoot = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
 
 	if not root then
-		executorPrint("[FAIL] Your HumanoidRootPart not found")
+		print("[FAIL] Your HumanoidRootPart not found")
 		return
 	end
 
 	if not targetRoot then
-		executorPrint("[FAIL] Target HumanoidRootPart not found")
+		print("[FAIL] Target HumanoidRootPart not found")
 		return
 	end
 
 	root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
-	executorPrint("[SUCCESS] Teleported to player:", target.Name)
+	print("[SUCCESS] Teleported to player:", target.Name)
 end)
 
 addCommand("view", "Teleports your player camera to the specified player, usage: 'view username'", function(username)
 	if not username or username == "" then
-		executorPrint("[FAIL] Missing username for view command")
+		print("[FAIL] Missing username for view command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		executorPrint("[FAIL] Player not found:", username)
+		print("[FAIL] Player not found:", username)
 		return
 	end
 
 	local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		executorPrint("[FAIL] Target humanoid not found")
+		print("[FAIL] Target humanoid not found")
 		return
 	end
 
 	local camera = workspace.CurrentCamera
 	if not camera then
-		executorPrint("[FAIL] Camera not found")
+		print("[FAIL] Camera not found")
 		return
 	end
 
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = target
-	executorPrint("[SUCCESS] Now viewing player:", target.Name)
+	print("[SUCCESS] Now viewing player:", target.Name)
 end)
 
 addCommand("unview", "Teleports your player camera back to you, if you are spectating someone", function()
@@ -2651,23 +2602,23 @@ addCommand("unview", "Teleports your player camera back to you, if you are spect
 	local camera = workspace.CurrentCamera
 
 	if not humanoid then
-		executorPrint("[FAIL] Your humanoid not found")
+		print("[FAIL] Your humanoid not found")
 		return
 	end
 
 	if not camera then
-		executorPrint("[FAIL] Camera not found")
+		print("[FAIL] Camera not found")
 		return
 	end
 
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = nil
-	executorPrint("[SUCCESS] Camera returned to your character")
+	print("[SUCCESS] Camera returned to your character")
 end)
 
 addCommand("noclip", "Disables all collisions for your local player essentially letting you walk through walls", function()
 	if STATE.noclipEnabled then
-		executorPrint("[FAIL] Noclip is already enabled")
+		print("[FAIL] Noclip is already enabled")
 		return
 	end
 
@@ -2685,12 +2636,12 @@ addCommand("noclip", "Disables all collisions for your local player essentially 
 		end
 	end)
 
-	executorPrint("[SUCCESS] Noclip enabled")
+	print("[SUCCESS] Noclip enabled")
 end)
 
 addCommand("clip", "Disables the noclip function", function()
 	if not STATE.noclipEnabled then
-		executorPrint("[FAIL] Noclip is not currently enabled")
+		print("[FAIL] Noclip is not currently enabled")
 		return
 	end
 
@@ -2710,38 +2661,38 @@ addCommand("clip", "Disables the noclip function", function()
 		end
 	end
 
-	executorPrint("[SUCCESS] Noclip disabled")
+	print("[SUCCESS] Noclip disabled")
 end)
 
 addCommand("sit", "Forces your player to sit on the nearest ground, to unsit simply jump once", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then
-		executorPrint("[FAIL] Humanoid not found for sit")
+		print("[FAIL] Humanoid not found for sit")
 		return
 	end
 
 	humanoid.Sit = true
-	executorPrint("[SUCCESS] Character sitting")
+	print("[SUCCESS] Character sitting")
 end)
 
 addCommand("fov", "Changes local fov (field of view), usage: 'fov 80'", function(amount)
 	if not amount or amount == "" then
-		executorPrint("[FAIL] Missing FOV amount")
+		print("[FAIL] Missing FOV amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		executorPrint("[FAIL] Invalid FOV value:", amount)
+		print("[FAIL] Invalid FOV value:", amount)
 		return
 	end
 
-	executorPrint("[SUCCESS] FOV set to:", numAmount)
+	print("[SUCCESS] FOV set to:", numAmount)
 	startCustomFov(amount)
 end)
 
 addCommand("resetfov", "Resets your local fov to the default one set by the owner of this experience", function()
-	executorPrint("[SUCCESS] FOV reset to default")
+	print("[SUCCESS] FOV reset to default")
 	stopCustomFov()
 end)
 
@@ -2751,123 +2702,123 @@ addCommand("fly", "Lets you fly around the game, usage: 'fly 100' For a decently
 	end
 
 	if STATE.flyEnabled then
-		executorPrint("[FAIL] Fly is already enabled")
+		print("[FAIL] Fly is already enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Fly enabled")
+	print("[SUCCESS] Fly enabled")
 	startFly(speed)
 end)
 
 addCommand("unfly", "Stops your character from flying any longer unless you use the fly command again", function()
 	if not STATE.flyEnabled then
-		executorPrint("[FAIL] Fly is not currently enabled")
+		print("[FAIL] Fly is not currently enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Fly disabled")
+	print("[SUCCESS] Fly disabled")
 	stopFly()
 end)
 
 addCommand("tracers", "Draws tracers, each one leading to different player, - tracer color is based on the players team color", function(distance)
 	if STATE.tracersEnabled then
-		executorPrint("[FAIL] Tracers are already enabled")
+		print("[FAIL] Tracers are already enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Tracers enabled")
+	print("[SUCCESS] Tracers enabled")
 	startTracers(distance)
 end)
 
 addCommand("untracers", "Disables the tracers, each one leading to different player, - tracer color is based on the players team color", function()
 	if not STATE.tracersEnabled then
-		executorPrint("[FAIL] Tracers are not currently enabled")
+		print("[FAIL] Tracers are not currently enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Tracers disabled")
+	print("[SUCCESS] Tracers disabled")
 	stopTracers()
 end)
 
 addCommand("freecam", "Lets you fly around in sort of a spectator mode, cool minecraft reference huh?", function(speed)
 	if STATE.freecamEnabled then
-		executorPrint("[FAIL] Freecam is already enabled")
+		print("[FAIL] Freecam is already enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Freecam enabled")
+	print("[SUCCESS] Freecam enabled")
 	startFreecam(speed)
 end)
 
 addCommand("unfreecam", "Destroys your freecam and puts your camera back to your character", function()
 	if not STATE.freecamEnabled then
-		executorPrint("[FAIL] Freecam is not currently enabled")
+		print("[FAIL] Freecam is not currently enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Freecam disabled")
+	print("[SUCCESS] Freecam disabled")
 	stopFreecam()
 end)
 
 addCommand("walkspeed", "Increases your walkspeed accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		executorPrint("[FAIL] Missing walkspeed amount")
+		print("[FAIL] Missing walkspeed amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		executorPrint("[FAIL] Invalid walkspeed value:", amount)
+		print("[FAIL] Invalid walkspeed value:", amount)
 		return
 	end
 
-	executorPrint("[SUCCESS] Walkspeed set to:", numAmount)
+	print("[SUCCESS] Walkspeed set to:", numAmount)
 	setWalkSpeed(amount)
 end)
 
 addCommand("resetwalkspeed", "Resets your characters walkspeed to a default one set by the owner of this experience", function()
-	executorPrint("[SUCCESS] Walkspeed reset to default")
+	print("[SUCCESS] Walkspeed reset to default")
 	resetWalkSpeed()
 end)
 
 addCommand("jumpheight", "Increases your jumpheight accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		executorPrint("[FAIL] Missing jumpheight amount")
+		print("[FAIL] Missing jumpheight amount")
 		return
 	end
 
 	local numAmount = tonumber(amount)
 	if not numAmount then
-		executorPrint("[FAIL] Invalid jumpheight value:", amount)
+		print("[FAIL] Invalid jumpheight value:", amount)
 		return
 	end
 
-	executorPrint("[SUCCESS] Jumpheight set to:", numAmount)
+	print("[SUCCESS] Jumpheight set to:", numAmount)
 	setJumpHeight(amount)
 end)
 
 addCommand("resetjumpheight", "Resets your characters jumpheight to a default one set by the owner of this experience", function()
-	executorPrint("[SUCCESS] Jumpheight reset to default")
+	print("[SUCCESS] Jumpheight reset to default")
 	resetJumpHeight()
 end)
 
 addCommand("fullbright", "Illuminates your whole game, this is useful for playing at night!", function()
 	if STATE.fullbrightEnabled then
-		executorPrint("[FAIL] Fullbright is already enabled")
+		print("[FAIL] Fullbright is already enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Fullbright enabled")
+	print("[SUCCESS] Fullbright enabled")
 	startFullbright()
 end)
 
 addCommand("unfullbright", "Resets the brightness to the default one set by the owner of this experience", function()
 	if not STATE.fullbrightEnabled then
-		executorPrint("[FAIL] Fullbright is not currently enabled")
+		print("[FAIL] Fullbright is not currently enabled")
 		return
 	end
 
-	executorPrint("[SUCCESS] Fullbright disabled")
+	print("[SUCCESS] Fullbright disabled")
 	stopFullbright()
 end)
 
@@ -2877,7 +2828,7 @@ addCommand("esphighlight", "Combines both the esp and the highlight functions!",
 	else
 		distance = tonumber(distance)
 		if not distance then
-			executorPrint("Invalid esphighlight distance")
+			print("Invalid esphighlight distance")
 			return
 		end
 	end
@@ -2895,56 +2846,56 @@ addCommand("esphighlight", "Combines both the esp and the highlight functions!",
 	end
 
 	updateHighlightVisibility()
-	executorPrint("Enabled esphighlight with distance:", distance == math.huge and "infinite" or distance)
+	print("Enabled esphighlight with distance:", distance == math.huge and "infinite" or distance)
 end)
 
 addCommand("unesphighlight", "Disables the combination of both the esp and the highlight functions!", function()
 	stopNametagSystem()
 	resetAllHighlights()
-	executorPrint("Disabled esphighlight")
+	print("Disabled esphighlight")
 end)
 
 addCommand("maxzoom", "Changes your camera's max zoom distance based on what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
-		executorPrint("[FAIL] Missing zoom amount")
+		print("[FAIL] Missing zoom amount")
 		return
 	end
 
 	amount = tonumber(amount)
 	if not amount then
-		executorPrint("[FAIL] Invalid zoom amount value:", amount)
+		print("[FAIL] Invalid zoom amount value:", amount)
 		return
 	end
 
 	LocalPlayer.CameraMaxZoomDistance = amount
-	executorPrint("[SUCCESS] Max zoom distance set to:", amount)
+	print("[SUCCESS] Max zoom distance set to:", amount)
 end)
 
 addCommand("defaultzoom", "Changes your camera's max zoom distance to the default settings set by the owner of this experience.", function()
 	LocalPlayer.CameraMaxZoomDistance = STATE.defaultCameraMaxZoom
-	executorPrint("[SUCCESS] Camera zoom reset to default:", STATE.defaultCameraMaxZoom)
+	print("[SUCCESS] Camera zoom reset to default:", STATE.defaultCameraMaxZoom)
 end)
 
 addCommand("teams", "Shows every team that exists in this experience", function()
-	executorPrint("[SUCCESS] Teams list displayed")
+	print("[SUCCESS] Teams list displayed")
 	populateTeamsList()
 end)
 
 addCommand("destroy", "Destroys the entire system leaving no trace of use!", function()
-	executorPrint("[SUCCESS] Executor system destroyed")
+	print("[SUCCESS] Executor system destroyed")
 	destroyExecutorSystem()
 end)
 
 addCommand("hitboxtransparency", "Changes the transparency of player humanoid root parts (0-1), usage: hitboxtransparency {amount} {player/team/all}", function(...)
 	local args = {...}
 	if #args < 1 then
-		executorPrint("Usage: hitboxtransparency {amount} {player/team/all}")
+		print("Usage: hitboxtransparency {amount} {player/team/all}")
 		return
 	end
 
 	local amount = tonumber(args[1])
 	if not amount then
-		executorPrint("Invalid transparency value")
+		print("Invalid transparency value")
 		return
 	end
 
@@ -2967,7 +2918,7 @@ addCommand("hitboxtransparency", "Changes the transparency of player humanoid ro
 			applyStoredHitboxTransparency(player)
 		end
 
-		executorPrint("Hitbox transparency set to", amount, "for all players")
+		print("Hitbox transparency set to", amount, "for all players")
 		return
 	end
 
@@ -2981,40 +2932,40 @@ addCommand("hitboxtransparency", "Changes the transparency of player humanoid ro
 				end
 			end
 
-			executorPrint("Hitbox transparency set to", amount, "for team:", team.Name)
+			print("Hitbox transparency set to", amount, "for team:", team.Name)
 			return
 		end
 	end
 
 	local targetPlayer = findPlayerByName(targetName)
 	if not targetPlayer then
-		executorPrint("Player or team not found:", targetName)
+		print("Player or team not found:", targetName)
 		return
 	end
 
 	STATE.hitboxTransparencyPlayers[targetPlayer.UserId] = amount
 	applyStoredHitboxTransparency(targetPlayer)
-	executorPrint("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
+	print("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
 end)
 
 addCommand("bind", "Binds a command to the specified key, usage: bind {key} {command}", function(...)
 	local args = {...}
 	if #args < 2 then
-		executorPrint("[FAIL] Usage: bind {key} {command}")
+		print("[FAIL] Usage: bind {key} {command}")
 		return
 	end
 
 	local keyName = string.upper(args[1])
 	local keyCode = Enum.KeyCode[keyName]
 	if not keyCode then
-		executorPrint("[FAIL] Invalid key:", keyName)
+		print("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	table.remove(args, 1)
 	local commandText = table.concat(args, " ")
 	if commandText == "" then
-		executorPrint("[FAIL] Missing command to bind")
+		print("[FAIL] Missing command to bind")
 		return
 	end
 
@@ -3022,29 +2973,29 @@ addCommand("bind", "Binds a command to the specified key, usage: bind {key} {com
 
 	if lowerCommand == "clickteleport" then
 		STATE.ghostBinds[keyCode] = "clickteleport"
-		executorPrint("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
+		print("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
 		return
 	end
 
 	if lowerCommand == "clickdelete" then
 		STATE.ghostBinds[keyCode] = "clickdelete"
-		executorPrint("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
+		print("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
 		return
 	end
 
 	if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
-		executorPrint("[FAIL] Cannot bind bind-related commands")
+		print("[FAIL] Cannot bind bind-related commands")
 		return
 	end
 
 	STATE.keybinds[keyCode] = commandText
 	saveBinds()
-	executorPrint("[SUCCESS] Bound key", keyName, "to command:", commandText)
+	print("[SUCCESS] Bound key", keyName, "to command:", commandText)
 end)
 
 addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	if not key or key == "" then
-		executorPrint("[FAIL] Usage: unbind {key}")
+		print("[FAIL] Usage: unbind {key}")
 		return
 	end
 
@@ -3052,12 +3003,12 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	local keyCode = Enum.KeyCode[keyName]
 
 	if not keyCode then
-		executorPrint("[FAIL] Invalid key:", keyName)
+		print("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	if not STATE.keybinds[keyCode] and not STATE.toggleBinds[keyCode] and not STATE.ghostBinds[keyCode] then
-		executorPrint("[FAIL] No bind found for key:", keyName)
+		print("[FAIL] No bind found for key:", keyName)
 		return
 	end
 
@@ -3066,7 +3017,7 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	STATE.ghostBinds[keyCode] = nil
 	saveBinds()
 
-	executorPrint("[SUCCESS] Unbound key:", keyName)
+	print("[SUCCESS] Unbound key:", keyName)
 end)
 
 addCommand("binds", "Lets you view all of your previously created binds.", function()
@@ -3108,7 +3059,7 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 	end
 
 	helperBg.Visible = true
-	executorPrint("[SUCCESS] Binds list displayed")
+	print("[SUCCESS] Binds list displayed", false)
 end)
 
 addCommand("clearbinds", "Clears all of your previously created binds", function()
@@ -3117,33 +3068,33 @@ addCommand("clearbinds", "Clears all of your previously created binds", function
 	table.clear(STATE.ghostBinds)
 	saveBinds()
 
-	executorPrint("[SUCCESS] All binds cleared")
+	print("[SUCCESS] All binds cleared")
 end)
 
 addCommand("togglebind", "Binds a toggleable command to the specified key", function(...)
 	local args = {...}
 	if #args < 2 then
-		executorPrint("[FAIL] Usage: togglebind {key} {command}")
+		print("[FAIL] Usage: togglebind {key} {command}")
 		return
 	end
 
 	local keyName = string.upper(args[1])
 	local keyCode = Enum.KeyCode[keyName]
 	if not keyCode then
-		executorPrint("[FAIL] Invalid key:", keyName)
+		print("[FAIL] Invalid key:", keyName)
 		return
 	end
 
 	table.remove(args, 1)
 	local commandText = table.concat(args, " ")
 	if commandText == "" then
-		executorPrint("[FAIL] Missing command to bind")
+		print("[FAIL] Missing command to bind")
 		return
 	end
 
 	local lowerCommand = string.lower(commandText)
 	if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
-		executorPrint("[FAIL] Cannot bind bind-related commands")
+		print("[FAIL] Cannot bind bind-related commands")
 		return
 	end
 
@@ -3174,7 +3125,7 @@ addCommand("togglebind", "Binds a toggleable command to the specified key", func
 	end
 
 	if not offCommand then
-		executorPrint("[FAIL] Toggle command not supported. Use 'bind' for non-toggle commands.")
+		print("[FAIL] Toggle command not supported. Use 'bind' for non-toggle commands.")
 		return
 	end
 
@@ -3185,57 +3136,57 @@ addCommand("togglebind", "Binds a toggleable command to the specified key", func
 	}
 
 	saveBinds()
-	executorPrint("[SUCCESS] Toggle bind created:", keyName, "->", matchedCommand)
+	print("[SUCCESS] Toggle bind created:", keyName, "->", matchedCommand)
 end)
 
 addCommand("waypointcreate", "Creates a waypoint at your current position with the specified name", function(...)
 	local args = {...}
 	if #args < 1 then
-		executorPrint("[FAIL] Usage: waypointcreate {name}")
+		print("[FAIL] Usage: waypointcreate {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		executorPrint("[FAIL] Missing waypoint name")
+		print("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if STATE.waypoints[waypointName] then
-		executorPrint("[FAIL] Waypoint already exists:", waypointName)
+		print("[FAIL] Waypoint already exists:", waypointName)
 		return
 	end
 
 	local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not root then
-		executorPrint("[FAIL] HumanoidRootPart not found")
+		print("[FAIL] HumanoidRootPart not found")
 		return
 	end
 
 	STATE.waypoints[waypointName] = root.Position
 
 	if saveWaypoints() then
-		executorPrint("[SUCCESS] Waypoint created and saved:", waypointName)
+		print("[SUCCESS] Waypoint created and saved:", waypointName)
 	else
-		executorPrint("[SUCCESS] Waypoint created (not saved - executor API unavailable):", waypointName)
+		print("[SUCCESS] Waypoint created (not saved - executor API unavailable):", waypointName)
 	end
 end)
 
 addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	local args = {...}
 	if #args < 1 then
-		executorPrint("[FAIL] Usage: waypointdelete {name}")
+		print("[FAIL] Usage: waypointdelete {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		executorPrint("[FAIL] Missing waypoint name")
+		print("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if not STATE.waypoints[waypointName] then
-		executorPrint("[FAIL] Waypoint not found:", waypointName)
+		print("[FAIL] Waypoint not found:", waypointName)
 		return
 	end
 
@@ -3266,9 +3217,9 @@ addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	end
 
 	if saveWaypoints() then
-		executorPrint("[SUCCESS] Waypoint deleted and saved:", waypointName)
+		print("[SUCCESS] Waypoint deleted and saved:", waypointName)
 	else
-		executorPrint("[SUCCESS] Waypoint deleted (not saved - executor API unavailable):", waypointName)
+		print("[SUCCESS] Waypoint deleted (not saved - executor API unavailable):", waypointName)
 	end
 end)
 
@@ -3300,48 +3251,48 @@ addCommand("waypoints", "Shows all created waypoints", function()
 	end
 
 	helperBg.Visible = true
-	executorPrint("[SUCCESS] Waypoints list displayed")
+	print("[SUCCESS] Waypoints list displayed", false)
 end)
 
 addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(...)
 	local args = {...}
 	if #args < 1 then
-		executorPrint("[FAIL] Usage: gotowaypoint {name}")
+		print("[FAIL] Usage: gotowaypoint {name}")
 		return
 	end
 
 	local waypointName = table.concat(args, " ")
 	if waypointName == "" then
-		executorPrint("[FAIL] Missing waypoint name")
+		print("[FAIL] Missing waypoint name")
 		return
 	end
 
 	if not STATE.waypoints[waypointName] then
-		executorPrint("[FAIL] Waypoint not found:", waypointName)
+		print("[FAIL] Waypoint not found:", waypointName)
 		return
 	end
 
 	local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not root then
-		executorPrint("[FAIL] HumanoidRootPart not found")
+		print("[FAIL] HumanoidRootPart not found")
 		return
 	end
 
 	root.CFrame = CFrame.new(STATE.waypoints[waypointName])
-	executorPrint("[SUCCESS] Teleported to waypoint:", waypointName)
+	print("[SUCCESS] Teleported to waypoint:", waypointName)
 end)
 
 addCommand("savewaypoints", "Manually saves all waypoints to file", function()
 	if saveWaypoints() then
-		executorPrint("[SUCCESS] Waypoints saved to file")
+		print("[SUCCESS] Waypoints saved to file")
 	else
-		executorPrint("[FAIL] Could not save waypoints - executor API unavailable")
+		print("[FAIL] Could not save waypoints - executor API unavailable")
 	end
 end)
 
 addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-based transparency", function()
 	if STATE.waypointShowEnabled and next(STATE.waypointMarkers) ~= nil then
-		executorPrint("[FAIL] Waypoints are already shown")
+		print("[FAIL] Waypoints are already shown")
 		return
 	end
 
@@ -3362,29 +3313,29 @@ addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-ba
 	STATE.waypointShowEnabled = true
 	startWaypointRendering()
 
-	executorPrint("[SUCCESS] Showing waypoint markers for", count, "waypoints")
+	print("[SUCCESS] Showing waypoint markers for", count, "waypoints")
 end)
 
 addCommand("hidewaypoints", "Hides all waypoint markers", function()
 	if not STATE.waypointShowEnabled then
-		executorPrint("[FAIL] Waypoints are already hidden")
+		print("[FAIL] Waypoints are already hidden")
 		return
 	end
 
 	stopWaypointRendering()
 	destroyWaypointMarkers()
-	executorPrint("[SUCCESS] Hid all waypoint markers")
+	print("[SUCCESS] Hid all waypoint markers")
 end)
 
 addCommand("playerinfo", "Displays detailed information about the specified player", function(username)
 	if not username or username == "" then
-		executorPrint("[FAIL] Missing username for playerinfo command")
+		print("[FAIL] Missing username for playerinfo command")
 		return
 	end
 
 	local target = findPlayerByName(username)
 	if not target then
-		executorPrint("[FAIL] Player not found:", username)
+		print("[FAIL] Player not found:", username)
 		return
 	end
 
@@ -3392,11 +3343,11 @@ addCommand("playerinfo", "Displays detailed information about the specified play
 end)
 
 addCommand("clickteleport", "Ghost command - Teleports you to where you click when holding the bound key. Must be bound using the bind command.", function()
-	executorPrint("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
+	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
 end)
 
 addCommand("clickdelete", "Ghost command - Deletes the object you click when holding the bound key. Must be bound using the bind command.", function()
-	executorPrint("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
+	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -3442,7 +3393,7 @@ local COMMAND_DISPLAY_NAMES = {
 local originalTexts = {
 	[title1] = title1.Text,
 	[title2] = "Welcome back, " .. LocalPlayer.Name .. ".",
-	[title3] = "Press ';' to Open the Menu",
+	[title3] = title3.Text,
 }
 
 title2.Text = originalTexts[title2]
@@ -3530,7 +3481,7 @@ populatePlayerInfo = function(targetPlayer)
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Player info displayed")
+	print("[SUCCESS] Player info displayed", false)
 end
 
 populateTeamsList = function()
@@ -3638,7 +3589,6 @@ local function resetSuggester()
 end
 
 local function resetInputAndSuggestions()
-	STATE.pendingMenuOpenCharacter = nil
 	commandInput.Text = ""
 	commandInput.CursorPosition = -1
 	resetSuggester()
@@ -3742,7 +3692,7 @@ local function rebuildSuggestions(matches)
 	end
 end
 
-updateSuggestions = function()
+local function updateSuggestions()
 	local text = getSearchText(commandInput.Text)
 	if text == "" then
 		resetSuggester()
@@ -3760,33 +3710,13 @@ local function openMenu()
 
 	resetInputAndSuggestions()
 	hideHelpList()
-
-	commandInput.TextEditable = false
-	commandInput:ReleaseFocus()
-	commandInput.Text = ""
-	commandInput.CursorPosition = -1
-
+	sanitizeCommandInput()
 	tween(mainBg, 0.05, {BackgroundTransparency = 0.45})
 
 	task.defer(function()
-		if not STATE.menuOpen then
-			return
-		end
-
-		commandInput.Text = ""
-		commandInput.CursorPosition = -1
-
-		task.defer(function()
-			if not STATE.menuOpen then
-				return
-			end
-
-			commandInput.TextEditable = true
+		if STATE.menuOpen then
 			commandInput:CaptureFocus()
-			commandInput.Text = ""
-			commandInput.CursorPosition = -1
-			updateSuggestions()
-		end)
+		end
 	end)
 end
 
@@ -3812,9 +3742,9 @@ local function toggleMenu()
 	end
 
 	task.defer(function()
-		if commandInput then
-			commandInput.Text = ""
-			commandInput.CursorPosition = -1
+		if commandInput.Text:find(";") then
+			commandInput.Text = commandInput.Text:gsub(";", "")
+			commandInput.CursorPosition = #commandInput.Text + 1
 			updateSuggestions()
 		end
 	end)
@@ -3934,19 +3864,6 @@ STATE.inputFocusLostConnection = commandInput.FocusLost:Connect(function(enterPr
 end)
 
 STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	local key = input.KeyCode
-
-	-- MENU KEY OVERRIDE (always uses current live bind)
-	if key == STATE.commandOpenKey then
-		if not STATE.welcomeFinished then
-			return
-		end
-
-		STATE.pendingMenuOpenCharacter = nil
-		toggleMenu()
-		return
-	end
-
 	if not gameProcessed and not commandInput:IsFocused() then
 		if STATE.clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickTeleportKey and UserInputService:IsKeyDown(STATE.clickTeleportKey) then
@@ -3962,7 +3879,9 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			return
 		end
 
+		local key = input.KeyCode
 		local toggle = STATE.toggleBinds[key]
+
 		if toggle then
 			if toggle.state then
 				executeCommand(toggle.offCommand)
@@ -3991,11 +3910,26 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		end
 	end
 
+	if input.KeyCode == Enum.KeyCode.Semicolon then
+		if not STATE.welcomeFinished then
+			return
+		end
+
+		toggleMenu()
+
+		task.defer(function()
+			sanitizeCommandInput()
+			updateSuggestions()
+		end)
+
+		return
+	end
+
 	if not STATE.menuOpen then
 		return
 	end
 
-	if key == Enum.KeyCode.Tab and commandInput:IsFocused() then
+	if input.KeyCode == Enum.KeyCode.Tab and commandInput:IsFocused() then
 		local best = STATE.currentBestMatch
 		if best then
 			commandInput.Text = TAB_FILL_COMMANDS[best.Name] or best.Name
@@ -4494,9 +4428,6 @@ if loadBinds() then
 else
 	print("[INFO] No saved binds found or executor API unavailable")
 end
-
-title3.Text = "Press ';' to Open the Menu"
-originalTexts[title3] = title3.Text
 
 task.spawn(playWelcomeSequence)
 
