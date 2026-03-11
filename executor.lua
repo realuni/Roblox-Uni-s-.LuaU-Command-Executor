@@ -470,6 +470,7 @@ local STATE = {
 	globalCharacterConnections = {},
 	inputEndedConnection = nil,
 	nametagRenderDistance = math.huge,
+	hitboxTeamMultipliers = {},
 }
 
 local CONFIG = {
@@ -1690,10 +1691,17 @@ local function getActiveHitboxMultiplierForPlayer(player)
 		return nil
 	end
 
+	-- Player specific override
 	if STATE.hitboxPlayerMultipliers[player.UserId] ~= nil then
 		return STATE.hitboxPlayerMultipliers[player.UserId]
 	end
 
+	-- Team multiplier
+	if player.Team and STATE.hitboxTeamMultipliers[player.Team.Name] ~= nil then
+		return STATE.hitboxTeamMultipliers[player.Team.Name]
+	end
+
+	-- Global multiplier
 	return STATE.hitboxAllMultiplier
 end
 
@@ -1919,6 +1927,11 @@ local function ensureHitboxTracking()
 		end
 
 		hookHitboxCharacter(player)
+		player:GetPropertyChangedSignal("Team"):Connect(function()
+			task.defer(function()
+				refreshHitboxForPlayer(player)
+			end)
+		end)
 
 		task.defer(function()
 			if getActiveHitboxMultiplierForPlayer(player) ~= nil then
@@ -1978,6 +1991,7 @@ local function resetAllHitboxes()
 		end
 	end
 
+	table.clear(STATE.hitboxTeamMultipliers)
 	table.clear(STATE.originalHumanoidRootPartSizes)
 	table.clear(STATE.originalHumanoidRootPartCanCollide)
 end
@@ -2423,11 +2437,14 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 
 	for _, team in ipairs(game:GetService("Teams"):GetTeams()) do
 		if string.lower(team.Name) == lowerTarget then
+			STATE.hitboxTeamMultipliers[team.Name] = multiplier
+
 			for _, player in ipairs(Players:GetPlayers()) do
 				if player.Team == team and player ~= LocalPlayer then
 					applyHitboxToPlayer(player, multiplier)
 				end
 			end
+
 
 			STATE.hitboxSystemEnabled = true
 			refreshAllActiveHitboxes()
