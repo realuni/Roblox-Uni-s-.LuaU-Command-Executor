@@ -10,8 +10,11 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local BINDS_FILE = "executor_binds.json"
 local WAYPOINT_FILE = "executor_waypoints.json"
-local print = print
 local StarterGui = game:GetService("StarterGui")
+local VirtualUser = game:GetService("VirtualUser")
+local print = print
+local STATE
+local CONFIG
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- UI CREATION
@@ -551,7 +554,7 @@ local chatMessageTemplate = chatScrollingFrame:WaitForChild("PlayerUsername")
 -- SETTINGS
 --////////////////////////////////////////////////////
 
-local STATE = {
+STATE = {
 	hitboxTransparencyAll = nil,
 	hitboxTransparencyPlayers = {},
 	hitboxTransparencyTeams = {},
@@ -651,9 +654,47 @@ local STATE = {
 	strengthTouchedParts = {},
 	leaderboardsEnabled = true,
 	respawnEnabled = true,
+	defaultGravity = workspace.Gravity,
+	gravityMultiplier = 1,
+	gravityCustomEnabled = false,
+	defaultHipHeight = nil,
+	hipHeightCustomEnabled = false,
+	infJumpEnabled = false,
+	infJumpConnection = nil,
+	antiAfkEnabled = false,
+	antiAfkConnection = nil,
+	xrayEnabled = false,
+	xrayTransparency = 0.65,
+	xrayDescendantAddedConnection = nil,
+	particlesHidden = false,
+	particleOriginalEnabled = {},
+	particleDescendantAddedConnection = nil,
+	effectsHidden = false,
+	effectOriginalEnabled = {},
+	effectDescendantAddedConnection = nil,
+	texturesDisabled = false,
+	textureOriginalStates = {},
+	textureDescendantAddedConnection = nil,
+	antiVoidEnabled = false,
+	antiVoidConnection = nil,
+	antiVoidLastSafeCFrame = nil,
+	antiVoidThresholdY = -50,
+	uiHidden = false,
+	guiHiddenStates = {},
+	coreGuiHiddenStates = {},
+	lastExecutedCommand = nil,
+	commandHistory = {},
+	maxCommandHistory = 250,
+	fogModified = false,
+	fogBackup = nil,
+	edgeJumpEnabled = false,
+	edgeJumpConnection = nil,
+	edgeJumpHumanoidStateConnection = nil,
+	edgeJumpReady = false,
+	atmosphereBackup = {},
 }
 
-local CONFIG = {
+CONFIG = {
 	TYPE_SPEED = 0.02,
 	FADE_TIME = 0.4,
 	BETWEEN_TITLES_DELAY = 0.35,
@@ -662,11 +703,800 @@ local CONFIG = {
 	COLOR_NORMAL = Color3.fromRGB(159,182,202),
 	COLOR_SPOTLIGHT = Color3.fromRGB(255,255,255),
 
-	MAX_SUGGESTIONS = 6,
+	MAX_SUGGESTIONS = 25,
 
 	CLICKTP_MAX_DISTANCE = 1000,
 	CLICKTP_MIN_Y = -1000
 }
+
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- MAIN HELPER FUNCTIONS
+--////////////////////////////////////////////////////
+
+local function createExampleHelperLine(text)
+	local entry = exampleHelperTemplate:Clone()
+	entry.Visible = true
+	entry.Parent = helperScrollingFrame
+	entry.Size = UDim2.new(1, 0, 0, 28)
+
+	local label = entry:FindFirstChild("CommandLine")
+	if label then
+		label.RichText = true
+		label.Text = string.format("<font color=\"rgb(227,227,227)\">%s</font>", tostring(text))
+	end
+
+	helperBg.Visible = true
+	return entry
+end
+
+local function pushCommandHistory(commandText)
+	commandText = tostring(commandText or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if commandText == "" then
+		return
+	end
+
+	table.insert(STATE.commandHistory, 1, commandText)
+	STATE.lastExecutedCommand = commandText
+
+	if #STATE.commandHistory > (STATE.maxCommandHistory or 250) then
+		table.remove(STATE.commandHistory, #STATE.commandHistory)
+	end
+end
+
+local function stopNoFog()
+	if not STATE.fogModified then
+		return
+	end
+
+	local lighting = game:GetService("Lighting")
+
+	if STATE.fogBackup then
+		lighting.FogStart = STATE.fogBackup.FogStart
+		lighting.FogEnd = STATE.fogBackup.FogEnd
+	end
+
+	if STATE.atmosphereBackup then
+		for atmosphere, backup in pairs(STATE.atmosphereBackup) do
+			if atmosphere and atmosphere.Parent then
+				atmosphere.Density = backup.Density
+				atmosphere.Offset = backup.Offset
+				atmosphere.Haze = backup.Haze
+				atmosphere.Glare = backup.Glare
+				atmosphere.Color = backup.Color
+				atmosphere.Decay = backup.Decay
+			end
+		end
+	end
+
+	STATE.fogModified = false
+end
+
+local function startNoFog()
+	local lighting = game:GetService("Lighting")
+
+	if not STATE.fogBackup then
+		STATE.fogBackup = {
+			FogStart = lighting.FogStart,
+			FogEnd = lighting.FogEnd,
+		}
+	end
+
+	if not STATE.atmosphereBackup then
+		STATE.atmosphereBackup = {}
+	end
+
+	for _, obj in ipairs(lighting:GetChildren()) do
+		if obj:IsA("Atmosphere") then
+			if not STATE.atmosphereBackup[obj] then
+				STATE.atmosphereBackup[obj] = {
+					Density = obj.Density,
+					Offset = obj.Offset,
+					Haze = obj.Haze,
+					Glare = obj.Glare,
+					Color = obj.Color,
+					Decay = obj.Decay,
+				}
+			end
+
+			obj.Density = 0
+			obj.Haze = 0
+			obj.Glare = 0
+			obj.Offset = 0
+		end
+	end
+
+	lighting.FogStart = 100000
+	lighting.FogEnd = 100000000
+
+	STATE.fogModified = true
+end
+
+local function stopEdgeJump()
+	STATE.edgeJumpEnabled = false
+	STATE.edgeJumpReady = false
+
+	if STATE.edgeJumpConnection then
+		STATE.edgeJumpConnection:Disconnect()
+		STATE.edgeJumpConnection = nil
+	end
+
+	if STATE.edgeJumpHumanoidStateConnection then
+		STATE.edgeJumpHumanoidStateConnection:Disconnect()
+		STATE.edgeJumpHumanoidStateConnection = nil
+	end
+end
+
+local function startEdgeJump()
+	stopEdgeJump()
+
+	local character = LocalPlayer.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not character or not humanoid or not root then
+		print("[FAIL] Character not ready for edgejump")
+		return
+	end
+
+	STATE.edgeJumpEnabled = true
+	STATE.edgeJumpReady = false
+
+	STATE.edgeJumpHumanoidStateConnection = humanoid.StateChanged:Connect(function(_, newState)
+		if not STATE.edgeJumpEnabled then
+			return
+		end
+
+		if newState == Enum.HumanoidStateType.Running or newState == Enum.HumanoidStateType.RunningNoPhysics then
+			STATE.edgeJumpReady = true
+		end
+	end)
+
+	STATE.edgeJumpConnection = RunService.RenderStepped:Connect(function()
+		if not STATE.edgeJumpEnabled then
+			return
+		end
+
+		local currentCharacter = LocalPlayer.Character
+		local currentHumanoid = currentCharacter and currentCharacter:FindFirstChildOfClass("Humanoid")
+		local currentRoot = currentCharacter and currentCharacter:FindFirstChild("HumanoidRootPart")
+
+		if not currentCharacter or not currentHumanoid or not currentRoot or currentHumanoid.Health <= 0 then
+			return
+		end
+
+		if currentHumanoid.FloorMaterial == Enum.Material.Air then
+			if STATE.edgeJumpReady then
+				STATE.edgeJumpReady = false
+				currentHumanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+			end
+		else
+			if currentHumanoid.MoveDirection.Magnitude > 0.01 then
+				STATE.edgeJumpReady = true
+			end
+		end
+	end)
+end
+
+local function showServerInfo()
+	prepareDisplayListMode()
+
+	local pingText = "Unknown"
+	pcall(function()
+		local statsService = game:GetService("Stats")
+		local network = statsService:FindFirstChild("Network")
+		if network then
+			local serverStatsItem = network:FindFirstChild("ServerStatsItem")
+			local dataPing = serverStatsItem and serverStatsItem:FindFirstChild("Data Ping")
+			if dataPing and dataPing.GetValueString then
+				pingText = dataPing:GetValueString()
+			end
+		end
+	end)
+
+	createExampleHelperLine("PlaceId -> " .. tostring(game.PlaceId))
+	createExampleHelperLine("JobId -> " .. tostring(game.JobId))
+	createExampleHelperLine("CreatorId -> " .. tostring(game.CreatorId))
+	createExampleHelperLine("CreatorType -> " .. tostring(game.CreatorType))
+	createExampleHelperLine("Players -> " .. tostring(#Players:GetPlayers()) .. "/" .. tostring(Players.MaxPlayers))
+	createExampleHelperLine("LocalPlayer -> " .. tostring(LocalPlayer.Name))
+	createExampleHelperLine("Ping -> " .. tostring(pingText))
+	createExampleHelperLine("Game Loaded -> " .. tostring(game:IsLoaded()))
+
+	helperBg.Visible = true
+end
+
+local function showCommandHistory()
+	prepareDisplayListMode()
+
+	if #STATE.commandHistory == 0 then
+		createExampleHelperLine("No command history.")
+		helperBg.Visible = true
+		return
+	end
+
+	for index, cmdText in ipairs(STATE.commandHistory) do
+		createExampleHelperLine(string.format("%d -> %s", index, cmdText))
+	end
+
+	helperBg.Visible = true
+end
+
+
+--
+
+--
+
+local function isExecutorOwnedInstance(instance)
+	if not instance then
+		return false
+	end
+
+	if commandExecutor and instance:IsDescendantOf(commandExecutor) then
+		return true
+	end
+
+	if instance.Name == "ExecutorHighlight" then
+		return true
+	end
+
+	local parent = instance.Parent
+	if parent and parent.Name == "CommandExecutor" then
+		return true
+		end
+
+		return false
+	end
+
+	--
+
+	--
+
+local function stopAntiVoid()
+	STATE.antiVoidEnabled = false
+	STATE.antiVoidLastSafeCFrame = nil
+
+	if STATE.antiVoidConnection then
+		STATE.antiVoidConnection:Disconnect()
+		STATE.antiVoidConnection = nil
+	end
+end
+
+local function getGroundedSafeCFrame(character, root)
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = {character}
+
+	local origin = root.Position
+	local direction = Vector3.new(0, -12, 0)
+	local result = workspace:Raycast(origin, direction, rayParams)
+
+	if result then
+		return CFrame.new(result.Position + Vector3.new(0, 3.5, 0))
+	end
+
+	return nil
+end
+
+local function startAntiVoid()
+	stopAntiVoid()
+
+	STATE.antiVoidEnabled = true
+
+	STATE.antiVoidConnection = RunService.Heartbeat:Connect(function()
+		if not STATE.antiVoidEnabled then
+			return
+		end
+
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+
+		if not character or not humanoid or not root or humanoid.Health <= 0 then
+			return
+		end
+
+		-- only save a position when there's actual ground under the player
+		local safeCFrame = getGroundedSafeCFrame(character, root)
+		if safeCFrame then
+			STATE.antiVoidLastSafeCFrame = safeCFrame
+		end
+
+		if root.Position.Y <= STATE.antiVoidThresholdY then
+			local targetCFrame = STATE.antiVoidLastSafeCFrame
+			if targetCFrame then
+				root.CFrame = targetCFrame
+				root.AssemblyLinearVelocity = Vector3.zero
+				root.AssemblyAngularVelocity = Vector3.zero
+			end
+		end
+	end)
+end
+
+local function stopHideUi()
+	STATE.uiHidden = false
+
+	for guiObject, wasEnabled in pairs(STATE.guiHiddenStates) do
+		if guiObject and guiObject.Parent then
+			if guiObject:IsA("LayerCollector") then
+				guiObject.Enabled = wasEnabled
+			elseif guiObject:IsA("GuiObject") then
+				guiObject.Visible = wasEnabled
+			end
+		end
+	end
+	table.clear(STATE.guiHiddenStates)
+
+	for coreType, wasEnabled in pairs(STATE.coreGuiHiddenStates) do
+		pcall(function()
+			StarterGui:SetCoreGuiEnabled(coreType, wasEnabled)
+		end)
+	end
+	table.clear(STATE.coreGuiHiddenStates)
+end
+
+local function startHideUi()
+	stopHideUi()
+
+	STATE.uiHidden = true
+
+	for _, child in ipairs(PlayerGui:GetChildren()) do
+		if child ~= commandExecutor then
+			if child:IsA("LayerCollector") then
+				STATE.guiHiddenStates[child] = child.Enabled
+				child.Enabled = false
+			elseif child:IsA("GuiObject") then
+				STATE.guiHiddenStates[child] = child.Visible
+				child.Visible = false
+			end
+		end
+	end
+
+	local coreTypes = {
+		Enum.CoreGuiType.Backpack,
+		Enum.CoreGuiType.Chat,
+		Enum.CoreGuiType.Health,
+		Enum.CoreGuiType.PlayerList,
+		Enum.CoreGuiType.EmotesMenu,
+		Enum.CoreGuiType.SelfView,
+		Enum.CoreGuiType.All,
+	}
+
+	for _, coreType in ipairs(coreTypes) do
+		STATE.coreGuiHiddenStates[coreType] = true
+		pcall(function()
+			StarterGui:SetCoreGuiEnabled(coreType, false)
+		end)
+	end
+end
+
+--
+
+--
+
+---
+
+local function getLocalHumanoid()
+	local character = LocalPlayer.Character
+	if not character then
+		return nil
+	end
+
+	return character:FindFirstChildOfClass("Humanoid")
+end
+
+local function cacheHipHeightDefault()
+	local humanoid = getLocalHumanoid()
+	if not humanoid then
+		return
+	end
+
+	if STATE.defaultHipHeight == nil then
+		STATE.defaultHipHeight = humanoid.HipHeight
+	end
+end
+
+local function setGravityMultiplier(multiplier)
+	multiplier = tonumber(multiplier)
+	if not multiplier or multiplier == 0 then
+		print("[FAIL] Invalid gravity multiplier")
+		return
+	end
+
+	if STATE.defaultGravity == nil then
+		STATE.defaultGravity = workspace.Gravity
+	end
+
+	STATE.gravityMultiplier = multiplier
+	STATE.gravityCustomEnabled = true
+
+	if multiplier > 0 then
+		workspace.Gravity = STATE.defaultGravity / multiplier
+	else
+		workspace.Gravity = STATE.defaultGravity * math.abs(multiplier)
+	end
+end
+
+local function resetGravity()
+	if STATE.defaultGravity == nil then
+		STATE.defaultGravity = workspace.Gravity
+	end
+
+	STATE.gravityMultiplier = 1
+	STATE.gravityCustomEnabled = false
+	workspace.Gravity = STATE.defaultGravity
+end
+
+local function setHipHeight(amount)
+	amount = tonumber(amount)
+	if not amount then
+		print("[FAIL] Invalid hipheight amount")
+		return
+	end
+
+	local humanoid = getLocalHumanoid()
+	if not humanoid then
+		print("[FAIL] Humanoid not found")
+		return
+	end
+
+	cacheHipHeightDefault()
+	humanoid.HipHeight = amount
+	STATE.hipHeightCustomEnabled = true
+end
+
+local function resetHipHeight()
+	local humanoid = getLocalHumanoid()
+	if not humanoid then
+		print("[FAIL] Humanoid not found")
+		return
+	end
+
+	cacheHipHeightDefault()
+
+	if STATE.defaultHipHeight ~= nil then
+		humanoid.HipHeight = STATE.defaultHipHeight
+	end
+
+	STATE.hipHeightCustomEnabled = false
+end
+
+local function stopInfJump()
+	STATE.infJumpEnabled = false
+
+	if STATE.infJumpConnection then
+		STATE.infJumpConnection:Disconnect()
+		STATE.infJumpConnection = nil
+	end
+end
+
+local function startInfJump()
+	stopInfJump()
+
+	STATE.infJumpEnabled = true
+	STATE.infJumpConnection = UserInputService.JumpRequest:Connect(function()
+		if not STATE.infJumpEnabled then
+			return
+		end
+
+		local humanoid = getLocalHumanoid()
+		if not humanoid or humanoid.Health <= 0 then
+			return
+		end
+
+		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	end)
+end
+
+local function stopAntiAfk()
+	STATE.antiAfkEnabled = false
+
+	if STATE.antiAfkConnection then
+		STATE.antiAfkConnection:Disconnect()
+		STATE.antiAfkConnection = nil
+	end
+end
+
+local function startAntiAfk()
+	stopAntiAfk()
+
+	STATE.antiAfkEnabled = true
+	STATE.antiAfkConnection = LocalPlayer.Idled:Connect(function()
+		if not STATE.antiAfkEnabled then
+			return
+		end
+
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new(0, 0))
+		end)
+	end)
+end
+
+local function applyXrayToInstance(instance)
+	if not STATE.xrayEnabled then
+		return
+	end
+
+	if not instance:IsA("BasePart") then
+		return
+	end
+
+	if LocalPlayer.Character and instance:IsDescendantOf(LocalPlayer.Character) then
+		return
+	end
+
+	instance.LocalTransparencyModifier = STATE.xrayTransparency
+end
+
+local function stopXray()
+	STATE.xrayEnabled = false
+
+	if STATE.xrayDescendantAddedConnection then
+		STATE.xrayDescendantAddedConnection:Disconnect()
+		STATE.xrayDescendantAddedConnection = nil
+	end
+
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.LocalTransparencyModifier = 0
+		end
+	end
+end
+
+local function startXray()
+	stopXray()
+
+	STATE.xrayEnabled = true
+
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		applyXrayToInstance(descendant)
+	end
+
+	STATE.xrayDescendantAddedConnection = workspace.DescendantAdded:Connect(function(descendant)
+		applyXrayToInstance(descendant)
+	end)
+end
+
+local function applyParticleHiddenState(instance, hidden)
+	if isExecutorOwnedInstance(instance) then
+		return
+	end
+
+	if not (instance:IsA("ParticleEmitter") or instance:IsA("Trail")) then
+		return
+	end
+
+	if hidden then
+		if STATE.particleOriginalEnabled[instance] == nil then
+			STATE.particleOriginalEnabled[instance] = instance.Enabled
+		end
+		instance.Enabled = false
+	else
+		if STATE.particleOriginalEnabled[instance] ~= nil and instance.Parent then
+			instance.Enabled = STATE.particleOriginalEnabled[instance]
+		end
+		STATE.particleOriginalEnabled[instance] = nil
+	end
+end
+
+local function stopHideParticles()
+	STATE.particlesHidden = false
+
+	if STATE.particleDescendantAddedConnection then
+		STATE.particleDescendantAddedConnection:Disconnect()
+		STATE.particleDescendantAddedConnection = nil
+	end
+
+	for instance in pairs(STATE.particleOriginalEnabled) do
+		if instance and instance.Parent then
+			instance.Enabled = STATE.particleOriginalEnabled[instance]
+		end
+	end
+
+	table.clear(STATE.particleOriginalEnabled)
+end
+
+local function startHideParticles()
+	stopHideParticles()
+
+	STATE.particlesHidden = true
+
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		applyParticleHiddenState(descendant, true)
+	end
+
+	STATE.particleDescendantAddedConnection = workspace.DescendantAdded:Connect(function(descendant)
+		applyParticleHiddenState(descendant, true)
+	end)
+end
+
+local function applyEffectHiddenState(instance, hidden)
+	if isExecutorOwnedInstance(instance) then
+		return
+	end
+
+	local isSupported =
+		instance:IsA("Beam")
+		or instance:IsA("Fire")
+		or instance:IsA("Smoke")
+		or instance:IsA("Sparkles")
+		or instance:IsA("BlurEffect")
+		or instance:IsA("BloomEffect")
+		or instance:IsA("ColorCorrectionEffect")
+		or instance:IsA("SunRaysEffect")
+		or instance:IsA("DepthOfFieldEffect")
+
+	if not isSupported then
+		return
+	end
+
+	if hidden then
+		if STATE.effectOriginalEnabled[instance] == nil then
+			STATE.effectOriginalEnabled[instance] = instance.Enabled
+		end
+
+		instance.Enabled = false
+	else
+		if STATE.effectOriginalEnabled[instance] ~= nil and instance.Parent then
+			instance.Enabled = STATE.effectOriginalEnabled[instance]
+		end
+		STATE.effectOriginalEnabled[instance] = nil
+	end
+end
+
+local function stopHideEffects()
+	STATE.effectsHidden = false
+
+	if STATE.effectDescendantAddedConnection then
+		STATE.effectDescendantAddedConnection:Disconnect()
+		STATE.effectDescendantAddedConnection = nil
+	end
+
+	for instance in pairs(STATE.effectOriginalEnabled) do
+		if instance and instance.Parent then
+			instance.Enabled = STATE.effectOriginalEnabled[instance]
+		end
+	end
+
+	table.clear(STATE.effectOriginalEnabled)
+end
+
+local function startHideEffects()
+	stopHideEffects()
+
+	STATE.effectsHidden = true
+
+	for _, descendant in ipairs(game:GetDescendants()) do
+		applyEffectHiddenState(descendant, true)
+	end
+
+	STATE.effectDescendantAddedConnection = game.DescendantAdded:Connect(function(descendant)
+		applyEffectHiddenState(descendant, true)
+	end)
+end
+
+--
+
+--
+
+local function applyTextureDisabledState(instance, disabled)
+	if instance:IsA("Texture") or instance:IsA("Decal") then
+		if disabled then
+			if STATE.textureOriginalStates[instance] == nil then
+				STATE.textureOriginalStates[instance] = {
+					Type = "Transparency",
+					Value = instance.Transparency,
+				}
+			end
+			instance.Transparency = 1
+		else
+			local state = STATE.textureOriginalStates[instance]
+			if state and instance.Parent then
+				instance.Transparency = state.Value
+			end
+			STATE.textureOriginalStates[instance] = nil
+		end
+		return
+	end
+
+	if instance:IsA("SurfaceAppearance") then
+		if disabled then
+			if STATE.textureOriginalStates[instance] == nil then
+				STATE.textureOriginalStates[instance] = {
+					Type = "Parent",
+					Value = instance.Parent,
+				}
+			end
+			instance.Parent = nil
+		else
+			local state = STATE.textureOriginalStates[instance]
+			if state and state.Value then
+				instance.Parent = state.Value
+			end
+			STATE.textureOriginalStates[instance] = nil
+		end
+		return
+	end
+
+	if instance:IsA("MeshPart") then
+		if disabled then
+			if STATE.textureOriginalStates[instance] == nil then
+				STATE.textureOriginalStates[instance] = {
+					Type = "MeshPart",
+					TextureID = instance.TextureID,
+					Material = instance.Material,
+				}
+			end
+			instance.TextureID = ""
+			instance.Material = Enum.Material.SmoothPlastic
+		else
+			local state = STATE.textureOriginalStates[instance]
+			if state and instance.Parent then
+				instance.TextureID = state.TextureID or ""
+				instance.Material = state.Material or Enum.Material.Plastic
+			end
+			STATE.textureOriginalStates[instance] = nil
+		end
+		return
+	end
+
+	if instance:IsA("BasePart") then
+		if disabled then
+			if STATE.textureOriginalStates[instance] == nil then
+				STATE.textureOriginalStates[instance] = {
+					Type = "Material",
+					Value = instance.Material,
+				}
+			end
+			instance.Material = Enum.Material.SmoothPlastic
+		else
+			local state = STATE.textureOriginalStates[instance]
+			if state and instance.Parent then
+				instance.Material = state.Value
+			end
+			STATE.textureOriginalStates[instance] = nil
+		end
+	end
+end
+
+local function stopDisableTextures()
+	STATE.texturesDisabled = false
+
+	if STATE.textureDescendantAddedConnection then
+		STATE.textureDescendantAddedConnection:Disconnect()
+		STATE.textureDescendantAddedConnection = nil
+	end
+
+	for instance, state in pairs(STATE.textureOriginalStates) do
+		if instance and instance.Parent then
+			if state.Type == "Transparency" then
+				instance.Transparency = state.Value
+			elseif state.Type == "Material" then
+				instance.Material = state.Value
+			elseif state.Type == "MeshPart" then
+				instance.TextureID = state.TextureID or ""
+				instance.Material = state.Material or Enum.Material.Plastic
+			end
+		elseif instance and state.Type == "Parent" and state.Value then
+			instance.Parent = state.Value
+		end
+
+		STATE.textureOriginalStates[instance] = nil
+	end
+end
+
+local function startDisableTextures()
+	stopDisableTextures()
+
+	STATE.texturesDisabled = true
+
+	for _, descendant in ipairs(workspace:GetDescendants()) do
+		applyTextureDisabledState(descendant, true)
+	end
+
+	STATE.textureDescendantAddedConnection = workspace.DescendantAdded:Connect(function(descendant)
+		applyTextureDisabledState(descendant, true)
+	end)
+end
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- WAYPOINT STORAGE SYSTEM
@@ -1132,19 +1962,7 @@ end
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPER FUNCTIONS
---////////////////////////////////////////////////////
-
-local populatePlayerInfo
-local populateHelpList
-local clearHelpEntries
-local hideHelpList
-local closeMenu
-local openMenu
-local getCubeHitboxSize
-
---\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
--- CHATLOGS SYSTEM
---////////////////////////////////////////////////////
+--//////////////////////////////////////////////////////
 
 local TextChatService = game:GetService("TextChatService")
 local TextService = game:GetService("TextService")
@@ -2865,6 +3683,18 @@ local function destroyExecutorSystem()
 	resetAllHitboxes()
 	stopWaypointRendering()
 	destroyWaypointMarkers()
+	resetGravity()
+	resetHipHeight()
+	stopInfJump()
+	stopAntiAfk()
+	stopXray()
+	stopHideParticles()
+	stopHideEffects()
+	stopDisableTextures()
+	stopAntiVoid()
+	stopHideUi()
+	stopNoFog()
+	stopEdgeJump()
 
 	STATE.clickTeleportKey = nil
 	STATE.clickDeleteKey = nil
@@ -3082,7 +3912,7 @@ local function clearActivePrintHelpers()
 	end
 end
 
-local function prepareDisplayListMode()
+prepareDisplayListMode = function()
 	clearActivePrintHelpers()
 	clearHelpEntries()
 	exampleHelperTemplate.Visible = false
@@ -4232,6 +5062,276 @@ addCommand("disablerespawn", "Disables the built-in Roblox reset character optio
 	setRespawnEnabled(false)
 end)
 
+addCommand("gravity", "Multiplies the current workspace gravity, usage: gravity {multiplier}", function(multiplier)
+	if not multiplier or multiplier == "" then
+		print("[FAIL] Missing gravity multiplier")
+		return
+	end
+
+	local num = tonumber(multiplier)
+	if not num then
+		print("[FAIL] Invalid gravity multiplier")
+		return
+	end
+
+	setGravityMultiplier(num)
+	print("[SUCCESS] Gravity multiplier set to:", num, "->", workspace.Gravity)
+end)
+
+addCommand("resetgravity", "Resets gravity back to the original value", function()
+	resetGravity()
+	print("[SUCCESS] Gravity reset to:", workspace.Gravity)
+end)
+
+addCommand("hipheight", "Sets your humanoid hip height, usage: hipheight {amount}", function(amount)
+	if not amount or amount == "" then
+		print("[FAIL] Missing hipheight amount")
+		return
+	end
+
+	local num = tonumber(amount)
+	if not num then
+		print("[FAIL] Invalid hipheight amount")
+		return
+	end
+
+	setHipHeight(num)
+	print("[SUCCESS] HipHeight set to:", num)
+end)
+
+addCommand("resethipheight", "Resets your humanoid hip height to the original value", function()
+	resetHipHeight()
+	print("[SUCCESS] HipHeight reset")
+end)
+
+addCommand("infjump", "Lets you jump infinitely without needing to touch the ground", function()
+	if STATE.infJumpEnabled then
+		print("[FAIL] Infjump is already enabled")
+		return
+	end
+
+	startInfJump()
+	print("[SUCCESS] Infjump enabled")
+end)
+
+addCommand("uninfjump", "Disables infjump", function()
+	if not STATE.infJumpEnabled then
+		print("[FAIL] Infjump is not currently enabled")
+		return
+	end
+
+	stopInfJump()
+	print("[SUCCESS] Infjump disabled")
+end)
+
+addCommand("antiafk", "Prevents your client from idling out", function()
+	if STATE.antiAfkEnabled then
+		print("[FAIL] Antiafk is already enabled")
+		return
+	end
+
+	startAntiAfk()
+	print("[SUCCESS] Antiafk enabled")
+end)
+
+addCommand("unantiafk", "Disables antiafk", function()
+	if not STATE.antiAfkEnabled then
+		print("[FAIL] Antiafk is not currently enabled")
+		return
+	end
+
+	stopAntiAfk()
+	print("[SUCCESS] Antiafk disabled")
+end)
+
+addCommand("xray", "Makes most world parts semi-transparent locally so you can see through them", function()
+	if STATE.xrayEnabled then
+		print("[FAIL] Xray is already enabled")
+		return
+	end
+
+	startXray()
+	print("[SUCCESS] Xray enabled")
+end)
+
+addCommand("unxray", "Disables xray and restores normal local visibility", function()
+	if not STATE.xrayEnabled then
+		print("[FAIL] Xray is not currently enabled")
+		return
+	end
+
+	stopXray()
+	print("[SUCCESS] Xray disabled")
+end)
+
+addCommand("hideparticles", "Hides particle emitters and trails locally", function()
+	if STATE.particlesHidden then
+		print("[FAIL] Particles are already hidden")
+		return
+	end
+
+	startHideParticles()
+	print("[SUCCESS] Particles hidden")
+end)
+
+addCommand("showparticles", "Shows particle emitters and trails again", function()
+	if not STATE.particlesHidden then
+		print("[FAIL] Particles are already visible")
+		return
+	end
+
+	stopHideParticles()
+	print("[SUCCESS] Particles restored")
+end)
+
+addCommand("hideeffects", "Hides common visual effects locally", function()
+	if STATE.effectsHidden then
+		print("[FAIL] Effects are already hidden")
+		return
+	end
+
+	startHideEffects()
+	print("[SUCCESS] Effects hidden")
+end)
+
+addCommand("showeffects", "Shows common visual effects again", function()
+	if not STATE.effectsHidden then
+		print("[FAIL] Effects are already visible")
+		return
+	end
+
+	stopHideEffects()
+	print("[SUCCESS] Effects restored")
+end)
+
+addCommand("disabletextures", "Removes textures locally and forces part materials to SmoothPlastic", function()
+	if STATE.texturesDisabled then
+		print("[FAIL] Textures are already disabled")
+		return
+	end
+
+	startDisableTextures()
+	print("[SUCCESS] Textures disabled")
+end)
+
+addCommand("enabletextures", "Restores textures and original materials locally", function()
+	if not STATE.texturesDisabled then
+		print("[FAIL] Textures are already enabled")
+		return
+	end
+
+	stopDisableTextures()
+	print("[SUCCESS] Textures restored")
+end)
+
+addCommand("antivoid", "Teleports you back up if you fall below the safe Y threshold", function()
+	if STATE.antiVoidEnabled then
+		print("[FAIL] Antivoid is already enabled")
+		return
+	end
+
+	startAntiVoid()
+	print("[SUCCESS] Antivoid enabled")
+end)
+
+addCommand("unantivoid", "Disables antivoid protection", function()
+	if not STATE.antiVoidEnabled then
+		print("[FAIL] Antivoid is not currently enabled")
+		return
+	end
+
+	stopAntiVoid()
+	print("[SUCCESS] Antivoid disabled")
+end)
+
+addCommand("hideui", "Hides most game UI locally while keeping the executor alive", function()
+	if STATE.uiHidden then
+		print("[FAIL] UI is already hidden")
+		return
+	end
+
+	startHideUi()
+	print("[SUCCESS] UI hidden")
+end)
+
+addCommand("showui", "Restores previously hidden UI", function()
+	if not STATE.uiHidden then
+		print("[FAIL] UI is already visible")
+		return
+	end
+
+	stopHideUi()
+	print("[SUCCESS] UI restored")
+end)
+
+addCommand("nofog", "Removes local fog by pushing FogStart/FogEnd very far away", function()
+	if STATE.fogModified then
+		print("[FAIL] Nofog is already enabled")
+		return
+	end
+
+	startNoFog()
+	print("[SUCCESS] Nofog enabled")
+end)
+
+addCommand("resetfog", "Restores the original local fog settings", function()
+	if not STATE.fogModified then
+		print("[FAIL] Nofog is not currently enabled")
+		return
+	end
+
+	stopNoFog()
+	print("[SUCCESS] Fog restored")
+end)
+
+addCommand("edgejump", "Automatically jumps for you when you run off an edge", function()
+	if STATE.edgeJumpEnabled then
+		print("[FAIL] Edgejump is already enabled")
+		return
+	end
+
+	startEdgeJump()
+	if STATE.edgeJumpEnabled then
+		print("[SUCCESS] Edgejump enabled")
+	end
+end)
+
+addCommand("unedgejump", "Disables the automatic edge jump system", function()
+	if not STATE.edgeJumpEnabled then
+		print("[FAIL] Edgejump is not currently enabled")
+		return
+	end
+
+	stopEdgeJump()
+	print("[SUCCESS] Edgejump disabled")
+end)
+
+addCommand("serverinfo", "Displays local server/session information using the helper panel", function()
+	showServerInfo()
+	print("[SUCCESS] Server info displayed")
+end)
+
+addCommand("cmdhistory", "Shows your executed command history using the helper panel", function()
+	showCommandHistory()
+	print("[SUCCESS] Command history displayed")
+end)
+
+addCommand("repeatlast", "Re-executes the last command you sent", function()
+	local last = STATE.lastExecutedCommand
+	if not last or last == "" then
+		print("[FAIL] No last command found")
+		return
+	end
+
+	if string.lower(last) == "repeatlast" then
+		print("[FAIL] Refused to repeat repeatlast recursively")
+		return
+	end
+
+	print("[SUCCESS] Re-executing:", last)
+	executeCommand(last)
+end)
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
@@ -4273,6 +5373,33 @@ local COMMAND_DISPLAY_NAMES = {
 	chatlogs = "chatlogs",
 	strengthen = "strengthen {multiplier}",
 	unstrengthen = "unstrengthen",
+	gravity = "gravity {multiplier}",
+	resetgravity = "resetgravity",
+	hipheight = "hipheight {amount}",
+	resethipheight = "resethipheight",
+	infjump = "infjump",
+	uninfjump = "uninfjump",
+	antiafk = "antiafk",
+	unantiafk = "unantiafk",
+	xray = "xray",
+	unxray = "unxray",
+	hideparticles = "hideparticles",
+	showparticles = "showparticles",
+	hideeffects = "hideeffects",
+	showeffects = "showeffects",
+	disabletextures = "disabletextures",
+	enabletextures = "enabletextures",
+	antivoid = "antivoid",
+	unantivoid = "unantivoid",
+	hideui = "hideui",
+	showui = "showui",
+	nofog = "nofog",
+	resetfog = "resetfog",
+	edgejump = "edgejump",
+	unedgejump = "unedgejump",
+	serverinfo = "serverinfo",
+	cmdhistory = "cmdhistory",
+	repeatlast = "repeatlast",
 }
 
 local originalTexts = {
@@ -4659,6 +5786,8 @@ local TAB_FILL_COMMANDS = {
 	playerinfo = "playerinfo ",
 	clickteleport = "clickteleport",
 	clickdelete = "clickdelete",
+	gravity = "gravity ",
+	hipheight = "hipheight ",
 }
 
 local function splitCommandArguments(text)
@@ -4694,7 +5823,7 @@ local function splitCommandArguments(text)
 	return args
 end
 
-local function executeCommand(commandText)
+executeCommand = function(commandText)
 	local cleaned = tostring(commandText or ""):gsub("^%s+", ""):gsub("%s+$", "")
 	if cleaned == "" then
 		commandInput.Text = ""
@@ -4720,6 +5849,10 @@ local function executeCommand(commandText)
 			commandInput.Text = ""
 			commandInput.CursorPosition = -1
 			updateSuggestions()
+
+			if cmdName ~= "repeatlast" then
+				pushCommandHistory(cleaned)
+			end
 
 			local ok, err
 			if args then
@@ -5314,54 +6447,95 @@ end
 -- STARTUP
 --////////////////////////////////////////////////////
 
-local screenGui = bg:FindFirstAncestorOfClass("ScreenGui")
-if screenGui then
-	screenGui.IgnoreGuiInset = true
-	screenGui.DisplayOrder = 999999
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-end
+local function bootExecutor()
+	local screenGui = bg:FindFirstAncestorOfClass("ScreenGui")
+	if screenGui then
+		screenGui.IgnoreGuiInset = true
+		screenGui.DisplayOrder = 999999
+		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	end
 
-local function forceTopLayer(guiObject)
-	for _, obj in ipairs(guiObject:GetDescendants()) do
-		if obj:IsA("GuiObject") then
-			obj.ZIndex = 1000
+	local function forceTopLayer(guiObject)
+		for _, obj in ipairs(guiObject:GetDescendants()) do
+			if obj:IsA("GuiObject") then
+				obj.ZIndex = 1000
+			end
 		end
 	end
+
+	forceTopLayer(bg)
+	forceTopLayer(outerChatModule)
+
+	resetSuggester()
+	bg.Visible = false
+	helperBg.Visible = false
+	exampleHelperTemplate.Visible = false
+	welcome.Visible = false
+	outerChatModule.Visible = false
+	chatModule.Visible = false
+
+	startGlobalPlayerTracking()
+	startChatlogsSystem()
+	initializeCoreGuiStates()
+
+	if loadWaypoints() then
+		print("[SUCCESS] Loaded saved waypoints from file")
+	else
+		print("[INFO] No saved waypoints found or executor API unavailable")
+	end
+
+	if loadBinds() then
+		print("[SUCCESS] Loaded saved binds from file")
+	else
+		print("[INFO] No saved binds found or executor API unavailable")
+	end
+
+	task.spawn(playWelcomeSequence)
+
+	STATE.characterCleanupConnection = LocalPlayer.CharacterAdded:Connect(function()
+		task.wait()
+
+		cacheMovementDefaults()
+		stopFly()
+		stopTracers()
+		stopFreecam()
+
+		refreshWaypointMarkers()
+
+		if STATE.gravityCustomEnabled then
+			if STATE.gravityMultiplier > 0 then
+				workspace.Gravity = STATE.defaultGravity / STATE.gravityMultiplier
+			else
+				workspace.Gravity = STATE.defaultGravity * math.abs(STATE.gravityMultiplier)
+			end
+		end
+
+		if STATE.edgeJumpEnabled then
+			task.defer(function()
+				startEdgeJump()
+			end)
+		end
+
+		if STATE.fogModified then
+			startNoFog()
+		end
+
+		if STATE.hipHeightCustomEnabled then
+			task.defer(function()
+				local humanoid = getLocalHumanoid()
+				if humanoid and STATE.defaultHipHeight ~= nil then
+					-- keep current custom hipheight after respawn only if user had changed it
+					-- nothing to do here unless you want to persist a custom amount
+				end
+			end)
+		end
+	end)
 end
 
-forceTopLayer(bg)
-forceTopLayer(outerChatModule)
-
-resetSuggester()
-bg.Visible = false
-helperBg.Visible = false
-exampleHelperTemplate.Visible = false
-
-startGlobalPlayerTracking()
-startChatlogsSystem()
-initializeCoreGuiStates()
-
-if loadWaypoints() then
-	print("[SUCCESS] Loaded saved waypoints from file")
-else
-	print("[INFO] No saved waypoints found or executor API unavailable")
+local bootOk, bootErr = pcall(bootExecutor)
+if not bootOk then
+	warn("[EXECUTOR BOOT ERROR] " .. tostring(bootErr))
+	pcall(function()
+		originalPrint("[EXECUTOR BOOT ERROR]", tostring(bootErr))
+	end)
 end
-
-if loadBinds() then
-	print("[SUCCESS] Loaded saved binds from file")
-else
-	print("[INFO] No saved binds found or executor API unavailable")
-end
-
-task.spawn(playWelcomeSequence)
-
-STATE.characterCleanupConnection = LocalPlayer.CharacterAdded:Connect(function()
-	task.wait()
-
-	cacheMovementDefaults()
-	stopFly()
-	stopTracers()
-	stopFreecam()
-
-	refreshWaypointMarkers()
-end)
