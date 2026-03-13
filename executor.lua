@@ -11,6 +11,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local BINDS_FILE = "executor_binds.json"
 local WAYPOINT_FILE = "executor_waypoints.json"
 local print = print
+local StarterGui = game:GetService("StarterGui")
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- UI CREATION
@@ -18,13 +19,11 @@ local print = print
 
 local commandExecutor = Instance.new("ScreenGui")
 commandExecutor.Name = "CommandExecutor"
-
--- FORCE UI ABOVE EVERYTHING
-commandExecutor.IgnoreGuiInset = true
 commandExecutor.DisplayOrder = 999999
-commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-commandExecutor.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 commandExecutor.ResetOnSpawn = false
+commandExecutor.IgnoreGuiInset = true
+commandExecutor.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+commandExecutor.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 do
 	local main = Instance.new("Frame")
@@ -32,7 +31,7 @@ do
 	main.BorderSizePixel = 0
 	main.BackgroundTransparency = 1
 	main.Size = UDim2.fromScale(1, 1)
-	main.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	main.BorderColor3 = Color3.fromRGB(17, 17, 17)
 	main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 	main.BorderColor = BrickColor.new("Really black")
 
@@ -43,7 +42,7 @@ do
 		welcome.BorderSizePixel = 0
 		welcome.Visible = false
 		welcome.Size = UDim2.fromScale(1, 1)
-		welcome.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		welcome.BorderColor3 = Color3.fromRGB(17, 17, 17)
 		welcome.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 		welcome.BorderColor = BrickColor.new("Really black")
 
@@ -56,12 +55,12 @@ do
 			title1.BackgroundTransparency = 1
 			title1.TextWrapped = true
 			title1.TextScaled = true
-			title1.Size = UDim2.fromScale(1, 0.053)
+			title1.Size = UDim2.fromScale(1, 0.0529)
 			title1.Position = UDim2.fromScale(0, 0.4083)
 			title1.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold)
 			title1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			title1.TextColor3 = Color3.fromRGB(255, 255, 255)
-			title1.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			title1.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			title1.BorderColor = BrickColor.new("Really black")
 			title1.Parent = welcome
 
@@ -78,7 +77,7 @@ do
 			title2.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json")
 			title2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			title2.TextColor3 = Color3.fromRGB(255, 255, 255)
-			title2.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			title2.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			title2.BorderColor = BrickColor.new("Really black")
 			title2.Parent = welcome
 
@@ -95,7 +94,7 @@ do
 			title3.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json")
 			title3.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			title3.TextColor3 = Color3.fromRGB(255, 255, 255)
-			title3.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			title3.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			title3.BorderColor = BrickColor.new("Really black")
 			title3.Parent = welcome
 		end
@@ -104,63 +103,63 @@ do
 
 		local bg = Instance.new("Frame")
 		bg.Name = "BG"
-		bg.BorderSizePixel = 0
 		bg.BackgroundTransparency = 1
+		bg.BorderSizePixel = 0
+		bg.Visible = false
 		bg.Size = UDim2.fromScale(1, 0.1823)
-		bg.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		bg.BorderColor3 = Color3.fromRGB(17, 17, 17)
 		bg.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 		bg.BorderColor = BrickColor.new("Really black")
-		bg.Visible = false
 
 		do
 			local mainBg = Instance.new("Frame")
 			mainBg.Name = "MainBG"
 			mainBg.BorderSizePixel = 0
-			mainBg.BackgroundTransparency = 0.45
+			mainBg.BackgroundTransparency = 0.4499
 			mainBg.Size = UDim2.fromScale(0.9771, 0.1823)
-			mainBg.Position = UDim2.fromScale(0.0111, 0.8215)
+			mainBg.Position = UDim2.fromScale(0.011, 0.8215)
 			mainBg.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
-			mainBg.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			mainBg.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			mainBg.BorderColor = BrickColor.new("Really black")
 
 			do
-				local textLabel = Instance.new("TextLabel")
-				textLabel.Name = "PromptLabel"
-				textLabel.Text = "LuaUExec@Cmdr$"
-				textLabel.BackgroundTransparency = 1
-				textLabel.BorderSizePixel = 0
-				textLabel.TextSize = 14
-				textLabel.TextWrapped = true
-				textLabel.TextScaled = true
-				textLabel.Size = UDim2.fromScale(0.0783, 0.5148)
-				textLabel.Position = UDim2.fromScale(0.007, 0.2317)
-				textLabel.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
-				textLabel.TextXAlignment = Enum.TextXAlignment.Left
-				textLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				textLabel.BorderColor3 = Color3.fromRGB(0, 0, 0)
-				textLabel.TextColor3 = Color3.fromRGB(202, 177, 53)
-				textLabel.BorderColor = BrickColor.new("Really black")
-				textLabel.Parent = mainBg
+				local promptLabel = Instance.new("TextLabel")
+				promptLabel.Text = "LuaUExec@Cmdr$"
+				promptLabel.Name = "PromptLabel"
+				promptLabel.BackgroundTransparency = 1
+				promptLabel.BorderSizePixel = 0
+				promptLabel.TextSize = 14
+				promptLabel.TextWrapped = true
+				promptLabel.TextScaled = true
+				promptLabel.Size = UDim2.fromScale(0.0782, 0.5148)
+				promptLabel.Position = UDim2.fromScale(0.007, 0.2317)
+				promptLabel.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+				promptLabel.TextXAlignment = Enum.TextXAlignment.Left
+				promptLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				promptLabel.BorderColor3 = Color3.fromRGB(17, 17, 17)
+				promptLabel.TextColor3 = Color3.fromRGB(202, 177, 53)
+				promptLabel.BorderColor = BrickColor.new("Really black")
+				promptLabel.Parent = mainBg
 
 				local commandInput = Instance.new("TextBox")
-				commandInput.PlaceholderText = "Type 'help' to view all of the commands"
-				commandInput.Name = "CommandInput"
 				commandInput.Text = ""
+				commandInput.Name = "CommandInput"
+				commandInput.PlaceholderText = "Type 'help' to view all of the commands"
+				commandInput.TextSize = 14
+				commandInput.CursorPosition = -1
 				commandInput.BackgroundTransparency = 1
 				commandInput.BorderSizePixel = 0
-				commandInput.CursorPosition = -1
-				commandInput.TextSize = 14
+				commandInput.ClearTextOnFocus = false
 				commandInput.TextWrapped = true
 				commandInput.TextScaled = true
-				commandInput.Position = UDim2.fromScale(0.0853, 0.2317)
 				commandInput.Size = UDim2.fromScale(0.9146, 0.5148)
+				commandInput.Position = UDim2.fromScale(0.0852, 0.2317)
 				commandInput.FontFace = Font.new("rbxasset://fonts/families/SourceSansPro.json")
 				commandInput.TextXAlignment = Enum.TextXAlignment.Left
-				commandInput.TextColor3 = Color3.fromRGB(227, 227, 227)
 				commandInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				commandInput.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				commandInput.TextColor3 = Color3.fromRGB(227, 227, 227)
+				commandInput.BorderColor3 = Color3.fromRGB(17, 17, 17)
 				commandInput.BorderColor = BrickColor.new("Really black")
-				commandInput.ClearTextOnFocus = false
 				commandInput.Parent = mainBg
 			end
 
@@ -170,12 +169,12 @@ do
 			helperBg.Name = "HelperBG"
 			helperBg.BorderSizePixel = 0
 			helperBg.BackgroundTransparency = 1
-			helperBg.Size = UDim2.fromScale(0.9771, 2.55)
-			helperBg.Position = UDim2.fromScale(0.0111, 1.05)
-			helperBg.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
-			helperBg.BorderColor3 = Color3.fromRGB(0, 0, 0)
-			helperBg.BorderColor = BrickColor.new("Really black")
 			helperBg.Visible = false
+			helperBg.Size = UDim2.fromScale(0.9771, 2.5499)
+			helperBg.Position = UDim2.fromScale(0.011, 1.0499)
+			helperBg.BorderColor3 = Color3.fromRGB(17, 17, 17)
+			helperBg.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+			helperBg.BorderColor = BrickColor.new("Really black")
 
 			do
 				local scrollingFrame = Instance.new("ScrollingFrame")
@@ -184,52 +183,48 @@ do
 				scrollingFrame.BorderSizePixel = 0
 				scrollingFrame.ScrollBarThickness = 0
 				scrollingFrame.Active = true
-				scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-				scrollingFrame.CanvasSize = UDim2.fromOffset(0, 0)
+				scrollingFrame.CanvasSize = UDim2.new(0, 0)
 				scrollingFrame.Size = UDim2.fromScale(1, 1)
-				scrollingFrame.Position = UDim2.fromScale(0, 0)
-				scrollingFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				scrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+				scrollingFrame.BorderColor3 = Color3.fromRGB(17, 17, 17)
 				scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(0, 0, 0)
-				scrollingFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				scrollingFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				scrollingFrame.BorderColor = BrickColor.new("Really black")
 
 				do
-					local uiListLayout = Instance.new("UIListLayout")
-					uiListLayout.Name = "UIListLayout"
-					uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-					uiListLayout.Padding = UDim.new(0, 4)
-					uiListLayout.Parent = scrollingFrame
+					local uilistLayout = Instance.new("UIListLayout")
+					uilistLayout.Name = "UIListLayout"
+					uilistLayout.Padding = UDim.new(0, 4)
+					uilistLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					uilistLayout.Parent = scrollingFrame
 
 					local exampleHelper = Instance.new("Frame")
 					exampleHelper.Name = "ExampleHelper"
+					exampleHelper.BackgroundTransparency = 0.4499
 					exampleHelper.BorderSizePixel = 0
-					exampleHelper.BackgroundTransparency = 0.45
+					exampleHelper.Visible = false
 					exampleHelper.Size = UDim2.new(1, 0, 0, 28)
-					exampleHelper.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					exampleHelper.BorderColor3 = Color3.fromRGB(17, 17, 17)
 					exampleHelper.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
 					exampleHelper.BorderColor = BrickColor.new("Really black")
-					exampleHelper.Visible = false
 
 					do
-						local helperText = Instance.new("TextLabel")
-						helperText.Name = "CommandLine"
-						helperText.Text = "Command Name : Command Description"
-						helperText.RichText = true
-						helperText.BackgroundTransparency = 1
-						helperText.BorderSizePixel = 0
-						helperText.TextSize = 14
-						helperText.TextWrapped = false
-						helperText.TextScaled = false
-						helperText.Size = UDim2.new(1, -16, 1, 0)
-						helperText.Position = UDim2.new(0, 8, 0, 0)
-						helperText.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
-						helperText.TextXAlignment = Enum.TextXAlignment.Left
-						helperText.TextYAlignment = Enum.TextYAlignment.Center
-						helperText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-						helperText.BorderColor3 = Color3.fromRGB(0, 0, 0)
-						helperText.TextColor3 = Color3.fromRGB(202, 177, 53)
-						helperText.BorderColor = BrickColor.new("Really black")
-						helperText.Parent = exampleHelper
+						local commandLine = Instance.new("TextLabel")
+						commandLine.Text = "Command Name : Command Description"
+						commandLine.Name = "CommandLine"
+						commandLine.BackgroundTransparency = 1
+						commandLine.BorderSizePixel = 0
+						commandLine.TextSize = 14
+						commandLine.RichText = true
+						commandLine.Size = UDim2.new(1, -16, 1, 0)
+						commandLine.Position = UDim2.fromOffset(8, 0)
+						commandLine.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+						commandLine.TextXAlignment = Enum.TextXAlignment.Left
+						commandLine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+						commandLine.BorderColor3 = Color3.fromRGB(17, 17, 17)
+						commandLine.TextColor3 = Color3.fromRGB(202, 177, 53)
+						commandLine.BorderColor = BrickColor.new("Really black")
+						commandLine.Parent = exampleHelper
 					end
 
 					exampleHelper.Parent = scrollingFrame
@@ -246,13 +241,13 @@ do
 		local commandSuggester = Instance.new("Frame")
 		commandSuggester.Name = "CommandSuggester"
 		commandSuggester.BorderSizePixel = 0
-		commandSuggester.BackgroundTransparency = 0.45
-		commandSuggester.Size = UDim2.fromScale(0.18, 0.0919)
-		commandSuggester.Position = UDim2.fromScale(0.0945, 0.1883)
-		commandSuggester.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
-		commandSuggester.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		commandSuggester.BorderColor = BrickColor.new("Really black")
+		commandSuggester.BackgroundTransparency = 0.4499
 		commandSuggester.Visible = false
+		commandSuggester.Size = UDim2.fromScale(0.18, 0.0918)
+		commandSuggester.Position = UDim2.fromScale(0.0944, 0.1882)
+		commandSuggester.BorderColor3 = Color3.fromRGB(17, 17, 17)
+		commandSuggester.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+		commandSuggester.BorderColor = BrickColor.new("Really black")
 
 		do
 			local commandName = Instance.new("TextLabel")
@@ -263,12 +258,12 @@ do
 			commandName.TextSize = 14
 			commandName.TextWrapped = true
 			commandName.TextScaled = true
-			commandName.Size = UDim2.fromScale(0.9821, 0.1996)
+			commandName.Size = UDim2.fromScale(0.9821, 0.1995)
 			commandName.Position = UDim2.fromScale(0.0388, 0.0974)
 			commandName.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold)
 			commandName.TextXAlignment = Enum.TextXAlignment.Left
 			commandName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			commandName.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			commandName.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			commandName.TextColor3 = Color3.fromRGB(255, 255, 255)
 			commandName.BorderColor = BrickColor.new("Really black")
 			commandName.Parent = commandSuggester
@@ -288,7 +283,7 @@ do
 			commandDescription.TextXAlignment = Enum.TextXAlignment.Left
 			commandDescription.TextColor3 = Color3.fromRGB(255, 255, 255)
 			commandDescription.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			commandDescription.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			commandDescription.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			commandDescription.BorderColor = BrickColor.new("Really black")
 			commandDescription.Parent = commandSuggester
 
@@ -296,26 +291,27 @@ do
 			container.Name = "Container"
 			container.BorderSizePixel = 0
 			container.BackgroundTransparency = 1
-			container.Size = UDim2.fromScale(1, 0.1785)
+			container.Size = UDim2.fromScale(1, 0.1784)
 			container.Position = UDim2.fromScale(0, 0.9993)
 			container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			container.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			container.BorderColor3 = Color3.fromRGB(17, 17, 17)
 			container.BorderColor = BrickColor.new("Really black")
 
 			do
 				local uilistLayout2 = Instance.new("UIListLayout")
+				uilistLayout2.Name = "UIListLayout"
 				uilistLayout2.SortOrder = Enum.SortOrder.LayoutOrder
 				uilistLayout2.Parent = container
 
 				local exampleSuggestion = Instance.new("Frame")
 				exampleSuggestion.Name = "ExampleSuggestion"
-				exampleSuggestion.BorderSizePixel = 0
 				exampleSuggestion.BackgroundTransparency = 0.6
+				exampleSuggestion.BorderSizePixel = 0
+				exampleSuggestion.Visible = false
 				exampleSuggestion.Size = UDim2.fromScale(1, 1.5276)
-				exampleSuggestion.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				exampleSuggestion.BorderColor3 = Color3.fromRGB(17, 17, 17)
 				exampleSuggestion.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
 				exampleSuggestion.BorderColor = BrickColor.new("Really black")
-				exampleSuggestion.Visible = false
 
 				do
 					local commandName2 = Instance.new("TextLabel")
@@ -326,12 +322,12 @@ do
 					commandName2.TextSize = 14
 					commandName2.TextWrapped = true
 					commandName2.TextScaled = true
-					commandName2.Size = UDim2.fromScale(0.9819, 0.5882)
-					commandName2.Position = UDim2.fromScale(0.0388, 0.1935)
+					commandName2.Size = UDim2.fromScale(0.9818, 0.5881)
+					commandName2.Position = UDim2.fromScale(0.0388, 0.1934)
 					commandName2.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
 					commandName2.TextXAlignment = Enum.TextXAlignment.Left
 					commandName2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-					commandName2.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					commandName2.BorderColor3 = Color3.fromRGB(17, 17, 17)
 					commandName2.TextColor3 = Color3.fromRGB(159, 182, 202)
 					commandName2.BorderColor = BrickColor.new("Really black")
 					commandName2.Parent = exampleSuggestion
@@ -344,12 +340,178 @@ do
 		end
 
 		commandSuggester.Parent = main
+
+		local chatModule = Instance.new("Frame")
+		chatModule.Name = "ChatModule"
+		chatModule.BorderSizePixel = 0
+		chatModule.BackgroundTransparency = 1
+		chatModule.Size = UDim2.fromScale(1, 1)
+		chatModule.BorderColor3 = Color3.fromRGB(17, 17, 17)
+		chatModule.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		chatModule.BorderColor = BrickColor.new("Really black")
+		chatModule.Visible = false
+
+		do
+			local chatWindow = Instance.new("Frame")
+			chatWindow.Name = "Window"
+			chatWindow.BorderSizePixel = 0
+			chatWindow.BackgroundTransparency = 0.99
+			chatWindow.Size = UDim2.fromScale(0.3443, 0.4755)
+			chatWindow.Position = UDim2.fromScale(0.3189, 0.2848)
+			chatWindow.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+			chatWindow.BorderColor3 = Color3.fromRGB(17, 17, 17)
+			chatWindow.BorderColor = BrickColor.new("Really black")
+
+			do
+				local chatModuleTop = Instance.new("Frame")
+				chatModuleTop.Name = "ChatModuleTop"
+				chatModuleTop.BorderSizePixel = 0
+				chatModuleTop.BackgroundTransparency = 0.4499
+				chatModuleTop.Size = UDim2.fromScale(1.0009, 0.0721)
+				chatModuleTop.Position = UDim2.fromScale(-0.001, -0.0011)
+				chatModuleTop.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+				chatModuleTop.BorderColor3 = Color3.fromRGB(17, 17, 17)
+				chatModuleTop.BorderColor = BrickColor.new("Really black")
+
+				do
+					local promptLabel2 = Instance.new("TextLabel")
+					promptLabel2.Text = "RobloxChatSpy-Module.lua"
+					promptLabel2.Name = "PromptLabel"
+					promptLabel2.BackgroundTransparency = 1
+					promptLabel2.BorderSizePixel = 0
+					promptLabel2.TextSize = 14
+					promptLabel2.TextWrapped = true
+					promptLabel2.TextScaled = true
+					promptLabel2.Size = UDim2.fromScale(0.4645, 0.5148)
+					promptLabel2.Position = UDim2.fromScale(0.0191, 0.2218)
+					promptLabel2.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+					promptLabel2.TextXAlignment = Enum.TextXAlignment.Left
+					promptLabel2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+					promptLabel2.BorderColor3 = Color3.fromRGB(17, 17, 17)
+					promptLabel2.TextColor3 = Color3.fromRGB(202, 177, 53)
+					promptLabel2.BorderColor = BrickColor.new("Really black")
+					promptLabel2.Parent = chatModuleTop
+
+					local close = Instance.new("TextButton")
+					close.Text = "EXIT"
+					close.Name = "Close"
+					close.BackgroundTransparency = 0.6499
+					close.BorderSizePixel = 0
+					close.TextSize = 19
+					close.TextWrapped = true
+					close.Position = UDim2.fromScale(0.8828, 0.1767)
+					close.Size = UDim2.fromOffset(68, 25)
+					close.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+					close.TextColor3 = Color3.fromRGB(202, 177, 53)
+					close.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+					close.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					close.BorderColor = BrickColor.new("Really black")
+
+					do
+						local uicorner = Instance.new("UICorner")
+						uicorner.CornerRadius = UDim.new(0, 4)
+						uicorner.Parent = close
+					end
+
+					close.Parent = chatModuleTop
+
+					local refresh = Instance.new("TextButton")
+					refresh.Text = "REFRESH"
+					refresh.Name = "Refresh"
+					refresh.BackgroundTransparency = 0.6499
+					refresh.BorderSizePixel = 0
+					refresh.TextSize = 19
+					refresh.TextWrapped = true
+					refresh.Position = UDim2.fromScale(0.7199, 0.1767)
+					refresh.Size = UDim2.fromOffset(95, 25)
+					refresh.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+					refresh.TextColor3 = Color3.fromRGB(202, 177, 53)
+					refresh.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+					refresh.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					refresh.BorderColor = BrickColor.new("Really black")
+
+					do
+						local uicorner2 = Instance.new("UICorner")
+						uicorner2.CornerRadius = UDim.new(0, 4)
+						uicorner2.Parent = refresh
+					end
+
+					refresh.Parent = chatModuleTop
+
+					local chatContent = Instance.new("Frame")
+					chatContent.Name = "Content"
+					chatContent.BorderSizePixel = 0
+					chatContent.BackgroundTransparency = 0.4499
+					chatContent.Size = UDim2.fromOffset(656, 477)
+					chatContent.Position = UDim2.fromScale(0, 1.79)
+					chatContent.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+					chatContent.BorderColor3 = Color3.fromRGB(17, 17, 17)
+					chatContent.BorderColor = BrickColor.new("Really black")
+
+					do
+						local scrollingFrame2 = Instance.new("ScrollingFrame")
+						scrollingFrame2.Name = "ScrollingFrame"
+						scrollingFrame2.BackgroundTransparency = 1
+						scrollingFrame2.BorderSizePixel = 0
+						scrollingFrame2.ScrollBarThickness = 6
+						scrollingFrame2.Active = true
+						scrollingFrame2.Size = UDim2.fromScale(0.9719, 0.979)
+						scrollingFrame2.CanvasSize = UDim2.fromScale(0, 200)
+						scrollingFrame2.Position = UDim2.fromScale(0.019, 0.0209)
+						scrollingFrame2.BorderColor3 = Color3.fromRGB(0, 0, 0)
+						scrollingFrame2.ScrollBarImageColor3 = Color3.fromRGB(0, 0, 0)
+						scrollingFrame2.BackgroundColor3 = Color3.fromRGB(28, 29, 34)
+						scrollingFrame2.BorderColor = BrickColor.new("Really black")
+
+						do
+							local uilistLayout3 = Instance.new("UIListLayout")
+							uilistLayout3.Name = "UIListLayout"
+							uilistLayout3.Padding = UDim.new(0, 4)
+							uilistLayout3.SortOrder = Enum.SortOrder.LayoutOrder
+							uilistLayout3.Parent = scrollingFrame2
+
+							local playerUsername = Instance.new("TextLabel")
+							playerUsername.Text = "USERNAME : MESSAGE"
+							playerUsername.Name = "PlayerUsername"
+							playerUsername.BackgroundTransparency = 1
+							playerUsername.BorderSizePixel = 0
+							playerUsername.TextSize = 19
+							playerUsername.TextWrapped = true
+							playerUsername.Size = UDim2.fromScale(0.99, 0)
+							playerUsername.Position = UDim2.fromScale(0, 0.002)
+							playerUsername.FontFace = Font.new("rbxasset://fonts/families/Inconsolata.json")
+							playerUsername.TextXAlignment = Enum.TextXAlignment.Left
+							playerUsername.TextYAlignment = Enum.TextYAlignment.Top
+							playerUsername.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+							playerUsername.BorderColor3 = Color3.fromRGB(17, 17, 17)
+							playerUsername.TextColor3 = Color3.fromRGB(202, 177, 53)
+							playerUsername.BorderColor = BrickColor.new("Really black")
+							playerUsername.Parent = scrollingFrame2
+						end
+
+						scrollingFrame2.Parent = chatContent
+					end
+
+					chatContent.Parent = chatModuleTop
+				end
+
+				chatModuleTop.Parent = chatWindow
+			end
+
+			chatWindow.Parent = chatModule
+		end
+
+		chatModule.Parent = main
 	end
 
 	main.Parent = commandExecutor
 end
 
 commandExecutor.Parent = PlayerGui
+local existingChatModule = commandExecutor:FindFirstChild("Main") and commandExecutor.Main:FindFirstChild("ChatModule")
+if existingChatModule then
+	existingChatModule.Visible = false
+end
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- REFERENCES
@@ -374,6 +536,16 @@ local helperScrollingFrame = helperBg:WaitForChild("ScrollingFrame")
 local exampleHelperTemplate = helperScrollingFrame:WaitForChild("ExampleHelper")
 local exampleHelperLabel = exampleHelperTemplate:WaitForChild("CommandLine")
 exampleHelperLabel.RichText = true
+
+local outerChatModule = main:WaitForChild("ChatModule")
+local chatModule = outerChatModule:FindFirstChild("ChatModule") or outerChatModule
+local chatWindow = chatModule:WaitForChild("Window")
+local chatModuleTop = chatWindow:WaitForChild("ChatModuleTop")
+local chatCloseButton = chatModuleTop:WaitForChild("Close")
+local chatRefreshButton = chatModuleTop:WaitForChild("Refresh")
+local chatContent = chatModuleTop:WaitForChild("Content")
+local chatScrollingFrame = chatContent:WaitForChild("ScrollingFrame")
+local chatMessageTemplate = chatScrollingFrame:WaitForChild("PlayerUsername")
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- SETTINGS
@@ -471,6 +643,14 @@ local STATE = {
 	inputEndedConnection = nil,
 	nametagRenderDistance = math.huge,
 	hitboxTeamMultipliers = {},
+	strengthEnabled = false,
+	strengthMultiplier = 1,
+	strengthInfinite = false,
+	strengthConnection = nil,
+	strengthTouchConnections = {},
+	strengthTouchedParts = {},
+	leaderboardsEnabled = true,
+	respawnEnabled = true,
 }
 
 local CONFIG = {
@@ -507,18 +687,18 @@ local function loadBinds()
 		return false
 	end
 
-	local keybinds = STATE.keybinds
-	local toggleBinds = STATE.toggleBinds
-	local ghostBinds = STATE.ghostBinds
+	table.clear(STATE.keybinds)
+	table.clear(STATE.toggleBinds)
+	table.clear(STATE.ghostBinds)
 
 	if data.keybinds then
 		for keyName, commands in pairs(data.keybinds) do
 			local keyCode = Enum.KeyCode[keyName]
 			if keyCode then
 				if type(commands) == "string" then
-					keybinds[keyCode] = {commands}
+					STATE.keybinds[keyCode] = {commands}
 				else
-					keybinds[keyCode] = commands
+					STATE.keybinds[keyCode] = commands
 				end
 			end
 		end
@@ -528,7 +708,7 @@ local function loadBinds()
 		for keyName, info in pairs(data.togglebinds) do
 			local keyCode = Enum.KeyCode[keyName]
 			if keyCode then
-				toggleBinds[keyCode] = {
+				STATE.toggleBinds[keyCode] = {
 					onCommand = info.onCommand,
 					offCommand = info.offCommand,
 					state = false
@@ -541,7 +721,7 @@ local function loadBinds()
 		for keyName, ghostCommand in pairs(data.ghostbinds) do
 			local keyCode = Enum.KeyCode[keyName]
 			if keyCode then
-				ghostBinds[keyCode] = ghostCommand
+				STATE.ghostBinds[keyCode] = ghostCommand
 			end
 		end
 	end
@@ -622,6 +802,54 @@ local function loadWaypoints()
 	end
 
 	return true
+end
+
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- ENABLE/DISABLE FUNCTIONS
+--////////////////////////////////////////////////////
+
+local function setLeaderboardsEnabled(enabled)
+	enabled = not not enabled
+
+	local ok, err = pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, enabled)
+	end)
+
+	if ok then
+		STATE.leaderboardsEnabled = enabled
+		print(enabled and "[SUCCESS] Leaderboards enabled" or "[SUCCESS] Leaderboards disabled")
+	else
+		print("[FAIL] Could not change leaderboards state:", tostring(err))
+	end
+end
+
+local function setRespawnEnabled(enabled)
+	enabled = not not enabled
+
+	local ok, err = pcall(function()
+		StarterGui:SetCore("ResetButtonCallback", enabled)
+	end)
+
+	if ok then
+		STATE.respawnEnabled = enabled
+		print(enabled and "[SUCCESS] Respawn enabled" or "[SUCCESS] Respawn disabled")
+	else
+		print("[FAIL] Could not change respawn state:", tostring(err))
+	end
+end
+
+local function initializeCoreGuiStates()
+	task.defer(function()
+		task.wait(1)
+
+		pcall(function()
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, STATE.leaderboardsEnabled)
+		end)
+
+		pcall(function()
+			StarterGui:SetCore("ResetButtonCallback", STATE.respawnEnabled)
+		end)
+	end)
 end
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -903,7 +1131,7 @@ end
 
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
--- SEARCH FUNCTIONS
+-- HELPER FUNCTIONS
 --////////////////////////////////////////////////////
 
 local populatePlayerInfo
@@ -912,31 +1140,529 @@ local clearHelpEntries
 local hideHelpList
 local closeMenu
 local openMenu
+local getCubeHitboxSize
 
-local function restoreCharacterAfterFreecam()
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- CHATLOGS SYSTEM
+--////////////////////////////////////////////////////
+
+local TextChatService = game:GetService("TextChatService")
+local TextService = game:GetService("TextService")
+
+local function setAllChatModulesHidden()
+	local mainFrame = commandExecutor:FindFirstChild("Main")
+	if not mainFrame then
+		return
+	end
+
+	local rootChatModule = mainFrame:FindFirstChild("ChatModule")
+	if not rootChatModule then
+		return
+	end
+
+	rootChatModule.Visible = false
+
+	for _, descendant in ipairs(rootChatModule:GetDescendants()) do
+		if descendant:IsA("Frame") and descendant.Name == "ChatModule" then
+			descendant.Visible = false
+		end
+	end
+end
+
+local function initChatlogsState()
+	STATE.chatLogsInitialized = STATE.chatLogsInitialized or false
+	STATE.chatLogsVisible = STATE.chatLogsVisible or false
+	STATE.chatLogsMaxMessages = 1000
+	STATE.chatLogHistory = STATE.chatLogHistory or {}
+	STATE.chatLogSequence = STATE.chatLogSequence or 0
+	STATE.chatLogConnections = STATE.chatLogConnections or {}
+	STATE.chatLogPlayerConnections = STATE.chatLogPlayerConnections or {}
+	STATE.chatWindowOriginalPosition = STATE.chatWindowOriginalPosition or chatWindow.Position
+	STATE.chatDragConnections = STATE.chatDragConnections or {}
+end
+
+local function escapeRichText(text)
+	text = tostring(text or "")
+	text = text:gsub("&", "&amp;")
+	text = text:gsub("<", "&lt;")
+	text = text:gsub(">", "&gt;")
+	text = text:gsub("\"", "&quot;")
+	return text
+end
+
+local function getChatLogLabelHeight(richTextString, width)
+	local plainText = tostring(richTextString or ""):gsub("<[^>]->", "")
+	local maxWidth = math.max(width, 100)
+
+	local bounds = TextService:GetTextSize(
+		plainText,
+		chatMessageTemplate.TextSize,
+		chatMessageTemplate.Font,
+		Vector2.new(maxWidth, math.huge)
+	)
+
+	return math.max(24, bounds.Y + 8)
+end
+
+local function clearChatLogUi()
+	for _, child in ipairs(chatScrollingFrame:GetChildren()) do
+		if child:IsA("TextLabel") and child ~= chatMessageTemplate then
+			child:Destroy()
+		end
+	end
+end
+
+local function buildChatLogRichText(entry)
+	local prefixColor = "rgb(202,177,53)"
+	local messageColor = "rgb(227,227,227)"
+
+	local dateText = escapeRichText(entry.TimeText or "00:00:00")
+	local teamText = escapeRichText(entry.TeamName or "NoTeam")
+	local usernameText = escapeRichText(entry.Username or "Unknown")
+	local messageText = escapeRichText(entry.Message or "")
+
+	return string.format(
+		"<font color=\"%s\">%s %s %s :</font> <font color=\"%s\">%s</font>",
+		prefixColor,
+		dateText,
+		teamText,
+		usernameText,
+		messageColor,
+		messageText
+	)
+end
+
+local function createChatLogLabel(entry)
+	local label = chatMessageTemplate:Clone()
+	label.Name = "ChatLog_" .. tostring(entry.Sequence)
+	label.Visible = true
+	label.RichText = true
+	label.TextWrapped = true
+	label.TextScaled = false
+	label.AutomaticSize = Enum.AutomaticSize.None
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(0.99, 0, 0, 24)
+	label.LayoutOrder = -entry.Sequence
+	label.Text = buildChatLogRichText(entry)
+	label.Parent = chatScrollingFrame
+
+	local availableWidth = math.floor(chatScrollingFrame.AbsoluteSize.X * 0.99) - 8
+	local neededHeight = getChatLogLabelHeight(label.Text, availableWidth)
+	label.Size = UDim2.new(0.99, 0, 0, neededHeight)
+
+	return label
+end
+
+local function rebuildChatLogWindow()
+	clearChatLogUi()
+	table.clear(STATE.chatLogHistory)
+	STATE.chatLogSequence = 0
+end
+
+local function appendChatLogMessage(player, messageText)
+	if not player then
+		return
+	end
+
+	messageText = tostring(messageText or "")
+	if messageText == "" then
+		return
+	end
+
+	STATE.chatLogSequence += 1
+
+	local entry = {
+		Sequence = STATE.chatLogSequence,
+		TimeText = os.date("%H:%M:%S"),
+		TeamName = player.Team and player.Team.Name or "NoTeam",
+		Username = player.Name,
+		Message = messageText,
+	}
+
+	table.insert(STATE.chatLogHistory, entry)
+	createChatLogLabel(entry)
+
+	if #STATE.chatLogHistory > STATE.chatLogsMaxMessages then
+		local oldest = table.remove(STATE.chatLogHistory, 1)
+		local oldestLabel = chatScrollingFrame:FindFirstChild("ChatLog_" .. tostring(oldest.Sequence))
+		if oldestLabel then
+			oldestLabel:Destroy()
+		end
+	end
+end
+
+local function closeChatLogs()
+	setAllChatModulesHidden()
+	STATE.chatLogsVisible = false
+	chatWindow.Position = STATE.chatWindowOriginalPosition
+end
+
+local function openChatLogs()
+	setAllChatModulesHidden()
+
+	if outerChatModule then
+		outerChatModule.Visible = true
+	end
+
+	if chatModule then
+		chatModule.Visible = true
+	end
+
+	chatWindow.Position = STATE.chatWindowOriginalPosition
+	STATE.chatLogsVisible = true
+end
+
+local function makeChatWindowDraggable()
+	for _, conn in ipairs(STATE.chatDragConnections) do
+		if conn then
+			conn:Disconnect()
+		end
+	end
+	table.clear(STATE.chatDragConnections)
+
+	chatModuleTop.Active = true
+
+	local dragging = false
+	local dragStart = nil
+	local startPosition = nil
+
+	local function updateDrag(input)
+		if not dragging or not dragStart or not startPosition then
+			return
+		end
+
+		local delta = input.Position - dragStart
+		chatWindow.Position = UDim2.new(
+			startPosition.X.Scale,
+			startPosition.X.Offset + delta.X,
+			startPosition.Y.Scale,
+			startPosition.Y.Offset + delta.Y
+		)
+	end
+
+	STATE.chatDragConnections[#STATE.chatDragConnections + 1] = chatModuleTop.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPosition = chatWindow.Position
+		end
+	end)
+
+	STATE.chatDragConnections[#STATE.chatDragConnections + 1] = chatModuleTop.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			dragStart = nil
+			startPosition = nil
+		end
+	end)
+
+	STATE.chatDragConnections[#STATE.chatDragConnections + 1] = UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			updateDrag(input)
+		end
+	end)
+end
+
+local function connectLegacyChatLogs()
+	for _, conn in pairs(STATE.chatLogPlayerConnections) do
+		if conn then
+			conn:Disconnect()
+		end
+	end
+	table.clear(STATE.chatLogPlayerConnections)
+
+	local function hookPlayer(player)
+		if STATE.chatLogPlayerConnections[player] then
+			STATE.chatLogPlayerConnections[player]:Disconnect()
+			STATE.chatLogPlayerConnections[player] = nil
+		end
+
+		STATE.chatLogPlayerConnections[player] = player.Chatted:Connect(function(message)
+			appendChatLogMessage(player, message)
+		end)
+	end
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		hookPlayer(player)
+	end
+
+	STATE.chatLogConnections[#STATE.chatLogConnections + 1] = Players.PlayerAdded:Connect(function(player)
+		hookPlayer(player)
+	end)
+
+	STATE.chatLogConnections[#STATE.chatLogConnections + 1] = Players.PlayerRemoving:Connect(function(player)
+		local conn = STATE.chatLogPlayerConnections[player]
+		if conn then
+			conn:Disconnect()
+			STATE.chatLogPlayerConnections[player] = nil
+		end
+	end)
+end
+
+local function connectModernChatLogs()
+	STATE.chatLogConnections[#STATE.chatLogConnections + 1] = TextChatService.MessageReceived:Connect(function(textChatMessage)
+		local textSource = textChatMessage.TextSource
+		if not textSource then
+			return
+		end
+
+		local player = Players:GetPlayerByUserId(textSource.UserId)
+		if not player then
+			return
+		end
+
+		appendChatLogMessage(player, textChatMessage.Text)
+	end)
+end
+
+local function startChatlogsSystem()
+	initChatlogsState()
+
+	outerChatModule.Visible = true
+	chatModule.Visible = false
+	STATE.chatLogsVisible = false
+	chatWindow.Position = STATE.chatWindowOriginalPosition
+
+	if STATE.chatLogsInitialized then
+		return
+	end
+
+	chatMessageTemplate.Visible = false
+	chatMessageTemplate.RichText = true
+	chatMessageTemplate.TextWrapped = true
+	chatMessageTemplate.TextScaled = false
+	chatMessageTemplate.AutomaticSize = Enum.AutomaticSize.None
+	chatMessageTemplate.TextYAlignment = Enum.TextYAlignment.Top
+	chatMessageTemplate.TextXAlignment = Enum.TextXAlignment.Left
+
+	chatScrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	chatScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+	makeChatWindowDraggable()
+
+	STATE.chatLogConnections[#STATE.chatLogConnections + 1] = chatCloseButton.MouseButton1Click:Connect(function()
+		closeChatLogs()
+	end)
+
+	STATE.chatLogConnections[#STATE.chatLogConnections + 1] = chatRefreshButton.MouseButton1Click:Connect(function()
+		rebuildChatLogWindow()
+	end)
+
+	local useModernChat = false
+	local ok, chatVersion = pcall(function()
+		return TextChatService.ChatVersion
+	end)
+
+	if ok and chatVersion == Enum.ChatVersion.TextChatService then
+		useModernChat = true
+	end
+
+	if useModernChat then
+		connectModernChatLogs()
+	else
+		connectLegacyChatLogs()
+	end
+
+	STATE.chatLogsInitialized = true
+end
+
+---
+
+---
+
+---
+
+local function clearStrengthTouchedParts()
+	for part in pairs(STATE.strengthTouchedParts) do
+		STATE.strengthTouchedParts[part] = nil
+	end
+end
+
+local function disconnectStrengthTouchConnections()
+	for _, conn in pairs(STATE.strengthTouchConnections) do
+		if conn then
+			conn:Disconnect()
+		end
+	end
+	table.clear(STATE.strengthTouchConnections)
+end
+
+local function isPushablePart(part)
+	if not part or not part:IsA("BasePart") then
+		return false
+	end
+
+	if not part:IsDescendantOf(workspace) then
+		return false
+	end
+
+	if part.Anchored then
+		return false
+	end
+
+	if LocalPlayer.Character and part:IsDescendantOf(LocalPlayer.Character) then
+		return false
+	end
+
+	return true
+end
+
+local function markStrengthPart(part)
+	if isPushablePart(part) then
+		STATE.strengthTouchedParts[part] = true
+	end
+end
+
+local function hookStrengthCharacter(character)
+	disconnectStrengthTouchConnections()
+	clearStrengthTouchedParts()
+
+	if not character then
+		return
+	end
+
+	for _, obj in ipairs(character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			STATE.strengthTouchConnections[#STATE.strengthTouchConnections + 1] = obj.Touched:Connect(function(hit)
+				markStrengthPart(hit)
+			end)
+		end
+	end
+end
+
+local function getStrengthImpulseMagnitude()
+	if STATE.strengthInfinite then
+		return 25000
+	end
+
+	return math.max(0, tonumber(STATE.strengthMultiplier) or 1) * 2500
+end
+
+local function getCharacterPushDirection()
+	local character = LocalPlayer.Character
+	if not character then
+		return nil
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not root then
+		return nil
+	end
+
+	local moveDirection = humanoid.MoveDirection
+	if moveDirection.Magnitude > 0.01 then
+		return moveDirection.Unit
+	end
+
+	local flatLook = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+	if flatLook.Magnitude > 0.01 then
+		return flatLook.Unit
+	end
+
+	return nil
+end
+
+local function stopStrength()
+	STATE.strengthEnabled = false
+	STATE.strengthMultiplier = 1
+	STATE.strengthInfinite = false
+
+	if STATE.strengthConnection then
+		STATE.strengthConnection:Disconnect()
+		STATE.strengthConnection = nil
+	end
+
+	disconnectStrengthTouchConnections()
+	clearStrengthTouchedParts()
+end
+
+local function startStrength(multiplierInput)
+	local multiplierText = tostring(multiplierInput or ""):lower()
+
+	if multiplierText == "inf" or multiplierText == "infinite" then
+		STATE.strengthInfinite = true
+		STATE.strengthMultiplier = math.huge
+	else
+		local multiplier = tonumber(multiplierInput)
+		if not multiplier or multiplier <= 0 then
+			print("[FAIL] Invalid strengthen multiplier")
+			return
+		end
+
+		STATE.strengthInfinite = false
+		STATE.strengthMultiplier = multiplier
+	end
+
+	stopStrength()
+
+	STATE.strengthEnabled = true
 
 	local character = LocalPlayer.Character
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
-	if not humanoid then return end
-
-	if STATE.defaultWalkSpeed then
-		humanoid.WalkSpeed = STATE.defaultWalkSpeed
+	if character then
+		hookStrengthCharacter(character)
 	end
 
-	if STATE.defaultJumpHeight then
-		humanoid.JumpHeight = STATE.defaultJumpHeight
-	end
+	STATE.strengthTouchConnections[#STATE.strengthTouchConnections + 1] = LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+		task.wait(0.2)
+		if STATE.strengthEnabled then
+			hookStrengthCharacter(newCharacter)
+		end
+	end)
 
-	humanoid.AutoRotate = true
+	STATE.strengthConnection = RunService.Heartbeat:Connect(function(dt)
+		if not STATE.strengthEnabled then
+			return
+		end
 
+		local character = LocalPlayer.Character
+		if not character then
+			return
+		end
+
+		local root = character:FindFirstChild("HumanoidRootPart")
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if not root or not humanoid or humanoid.Health <= 0 then
+			return
+		end
+
+		local pushDirection = getCharacterPushDirection()
+		if not pushDirection then
+			clearStrengthTouchedParts()
+			return
+		end
+
+		local impulseMagnitude = getStrengthImpulseMagnitude()
+		local verticalLift = STATE.strengthInfinite and 0.08 or 0.03
+
+		for part in pairs(STATE.strengthTouchedParts) do
+			if isPushablePart(part) then
+				local assemblyMass = part.AssemblyMass
+				if assemblyMass > 0 then
+					local impulseVector =
+						(pushDirection + Vector3.new(0, verticalLift, 0)).Unit
+						* impulseMagnitude
+						* assemblyMass
+						* dt
+
+					pcall(function()
+						part:ApplyImpulse(impulseVector)
+					end)
+				end
+			end
+
+			STATE.strengthTouchedParts[part] = nil
+		end
+	end)
 end
 
+---
 
-local function getCubeHitboxSize(originalSize, multiplier)
-	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
-	return Vector3.new(largestAxis, largestAxis, largestAxis)
-end
+---
+
+---
 
 local function freezeCharacterForFreecam()
 	local character = LocalPlayer.Character
@@ -996,7 +1722,6 @@ local function unfreezeCharacterFromFreecam()
 end
 
 local function stopFreecam()
-
 	if not STATE.freecamEnabled then
 		return
 	end
@@ -1017,20 +1742,19 @@ local function stopFreecam()
 	local character = LocalPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
-	if humanoid then
-		camera.CameraSubject = humanoid
+	if camera then
+		if humanoid then
+			camera.CameraSubject = humanoid
+		end
+		camera.CameraType = Enum.CameraType.Custom
 	end
 
-	camera.CameraType = Enum.CameraType.Custom
-
-	-- FIX mouse lock bug
 	task.defer(function()
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		UserInputService.MouseIconEnabled = true
 	end)
 
-	restoreCharacterAfterFreecam()
-
+	unfreezeCharacterFromFreecam()
 end
 
 local function getFreecamCharacterStartCFrame()
@@ -1143,7 +1867,6 @@ local function resetJumpHeight()
 end
 
 local function startFreecam(speed)
-
 	if STATE.menuOpen then
 		closeMenu()
 	end
@@ -1155,16 +1878,16 @@ local function startFreecam(speed)
 	speed = tonumber(speed) or 50
 
 	local camera = workspace.CurrentCamera
-	if not camera then return end
+	if not camera then
+		return
+	end
 
 	local startCFrame = camera.CFrame
 
 	STATE.freecamEnabled = true
 	cacheMovementDefaults()
 	freezeCharacterForFreecam()
-	freezeCharacterForFreecam()
 
-	-- Save camera state
 	STATE.freecamOriginalCameraType = camera.CameraType
 	STATE.freecamOriginalCameraSubject = camera.CameraSubject
 	STATE.freecamOriginalMouseBehavior = UserInputService.MouseBehavior
@@ -1181,23 +1904,24 @@ local function startFreecam(speed)
 	UserInputService.MouseIconEnabled = false
 
 	STATE.freecamMouseConnection = UserInputService.InputChanged:Connect(function(input, gameProcessed)
-
-		if not STATE.freecamEnabled then return end
-		if gameProcessed then return end
+		if not STATE.freecamEnabled then
+			return
+		end
+		if gameProcessed then
+			return
+		end
 
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
-
 			STATE.freecamYaw -= input.Delta.X * STATE.freecamSensitivity
 			STATE.freecamPitch -= input.Delta.Y * STATE.freecamSensitivity
 			STATE.freecamPitch = math.clamp(STATE.freecamPitch, math.rad(-89), math.rad(89))
-
 		end
-
 	end)
 
 	STATE.freecamConnection = RunService.RenderStepped:Connect(function(dt)
-
-		if not STATE.freecamEnabled then return end
+		if not STATE.freecamEnabled then
+			return
+		end
 
 		local currentCamera = workspace.CurrentCamera
 		if not currentCamera then
@@ -1209,7 +1933,6 @@ local function startFreecam(speed)
 		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 
-		-- freeze player
 		if humanoid then
 			humanoid.WalkSpeed = 0
 			humanoid.JumpHeight = 0
@@ -1250,9 +1973,7 @@ local function startFreecam(speed)
 		end
 
 		currentCamera.CFrame = CFrame.new(STATE.freecamPosition) * rotation
-
 	end)
-
 end
 
 local function stopFullbright()
@@ -1709,6 +2430,14 @@ local function getActiveHitboxMultiplierForPlayer(player)
 	return STATE.hitboxAllMultiplier
 end
 
+local function getCubeHitboxSize(originalSize, multiplier)
+	originalSize = originalSize or Vector3.new(2, 2, 1)
+	multiplier = tonumber(multiplier) or 0
+
+	local largestAxis = math.max(originalSize.X, originalSize.Y, originalSize.Z) * (1 + multiplier)
+	return Vector3.new(largestAxis, largestAxis, largestAxis)
+end
+
 local function applyStoredHitboxToCharacter(player, character)
 	if not player or player == LocalPlayer or not character then
 		return
@@ -2129,6 +2858,7 @@ local function destroyExecutorSystem()
 	stopTpWalk()
 	stopCustomFov()
 	stopFullbright()
+	stopStrength()
 	stopNametagSystem()
 	stopHitboxEnforcement()
 	resetAllHighlights()
@@ -2226,6 +2956,35 @@ local function destroyExecutorSystem()
 		STATE.highlightTeamConnections[player] = nil
 	end
 
+	if STATE.chatLogConnections then
+		for i = 1, #STATE.chatLogConnections do
+			local conn = STATE.chatLogConnections[i]
+			if conn then
+				conn:Disconnect()
+			end
+		end
+		table.clear(STATE.chatLogConnections)
+	end
+
+	if STATE.chatLogPlayerConnections then
+		for player, conn in pairs(STATE.chatLogPlayerConnections) do
+			if conn then
+				conn:Disconnect()
+			end
+			STATE.chatLogPlayerConnections[player] = nil
+		end
+	end
+
+	if STATE.chatDragConnections then
+		for i = 1, #STATE.chatDragConnections do
+			local conn = STATE.chatDragConnections[i]
+			if conn then
+				conn:Disconnect()
+			end
+		end
+		table.clear(STATE.chatDragConnections)
+	end
+
 	local character = LocalPlayer.Character
 	if character then
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -2312,6 +3071,22 @@ local function createPrintHelper(text, shouldFade)
 	end
 
 	return printHelperCounter
+end
+
+local function clearActivePrintHelpers()
+	for helperId, helperEntry in pairs(activePrintHelpers) do
+		if helperEntry and helperEntry.Parent then
+			helperEntry:Destroy()
+		end
+		activePrintHelpers[helperId] = nil
+	end
+end
+
+local function prepareDisplayListMode()
+	clearActivePrintHelpers()
+	clearHelpEntries()
+	exampleHelperTemplate.Visible = false
+	helperBg.Visible = false
 end
 
 -- IMPORTANT:
@@ -3015,18 +3790,22 @@ addCommand("bind", "Binds a command to the specified key, usage: bind {key} {com
 
 	local lowerCommand = string.lower(commandText)
 
+	-- GHOST COMMANDS
 	if lowerCommand == "clickteleport" then
 		STATE.ghostBinds[keyCode] = "clickteleport"
+		saveBinds()
 		print("[SUCCESS] Bound ghost command clickteleport to key:", keyName)
 		return
 	end
 
 	if lowerCommand == "clickdelete" then
 		STATE.ghostBinds[keyCode] = "clickdelete"
+		saveBinds()
 		print("[SUCCESS] Bound ghost command clickdelete to key:", keyName)
 		return
 	end
 
+	-- BLOCK BINDING BIND COMMANDS
 	if lowerCommand == "bind" or lowerCommand == "togglebind" or lowerCommand == "unbind" or lowerCommand == "clearbinds" then
 		print("[FAIL] Cannot bind bind-related commands")
 		return
@@ -3070,8 +3849,7 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 end)
 
 addCommand("binds", "Lets you view all of your previously created binds.", function()
-	clearHelpEntries()
-	exampleHelperTemplate.Visible = false
+	prepareDisplayListMode()
 
 	local found = false
 
@@ -3110,7 +3888,7 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Binds list displayed", false)
+	print("[SUCCESS] Binds list displayed")
 end)
 
 addCommand("clearbinds", "Clears all of your previously created binds", function()
@@ -3275,8 +4053,7 @@ addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 end)
 
 addCommand("waypoints", "Shows all created waypoints", function()
-	clearHelpEntries()
-	exampleHelperTemplate.Visible = false
+	prepareDisplayListMode()
 
 	local function createLine(text)
 		local entry = exampleHelperTemplate:Clone()
@@ -3302,7 +4079,7 @@ addCommand("waypoints", "Shows all created waypoints", function()
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Waypoints list displayed", false)
+	print("[SUCCESS] Waypoints list displayed")
 end)
 
 addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(...)
@@ -3401,6 +4178,60 @@ addCommand("clickdelete", "Ghost command - Deletes the object you click when hol
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
 end)
 
+addCommand("chatlogs", "Opens a draggable chat logs window which shows up to 1000 player messages from newest to oldest", function()
+	openChatLogs()
+	print("[SUCCESS] Chat logs opened")
+end)
+
+addCommand("strengthen", "Lets you push unanchored parts much more smoothly, usage: strengthen {multiplier} or strengthen inf", function(multiplier)
+	if not multiplier or multiplier == "" then
+		print("[FAIL] Missing strengthen multiplier")
+		return
+	end
+
+	local text = tostring(multiplier):lower()
+	if text == "inf" or text == "infinite" then
+		startStrength("inf")
+		print("[SUCCESS] Infinite strength enabled")
+		return
+	end
+
+	local num = tonumber(multiplier)
+	if not num or num <= 0 then
+		print("[FAIL] Invalid strengthen multiplier")
+		return
+	end
+
+	startStrength(num)
+	print("[SUCCESS] Strength multiplier set to:", num)
+end)
+
+addCommand("unstrengthen", "Disables the strengthen system and restores normal pushing", function()
+	if not STATE.strengthEnabled then
+		print("[FAIL] Strengthen is not currently enabled")
+		return
+	end
+
+	stopStrength()
+	print("[SUCCESS] Strengthen disabled")
+end)
+
+addCommand("enableleaderboards", "Enables the built-in Roblox leaderboard/player list locally", function()
+	setLeaderboardsEnabled(true)
+end)
+
+addCommand("disableleaderboards", "Disables the built-in Roblox leaderboard/player list locally", function()
+	setLeaderboardsEnabled(false)
+end)
+
+addCommand("enablerespawn", "Enables the built-in Roblox reset character option locally", function()
+	setRespawnEnabled(true)
+end)
+
+addCommand("disablerespawn", "Disables the built-in Roblox reset character option locally", function()
+	setRespawnEnabled(false)
+end)
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
@@ -3439,6 +4270,9 @@ local COMMAND_DISPLAY_NAMES = {
 	playerinfo = "playerinfo {player}",
 	clickteleport = "clickteleport [ghost - bind required]",
 	clickdelete = "clickdelete [ghost - bind required]",
+	chatlogs = "chatlogs",
+	strengthen = "strengthen {multiplier}",
+	unstrengthen = "unstrengthen",
 }
 
 local originalTexts = {
@@ -3470,8 +4304,7 @@ local function buildHelpEntryText(commandName, commandDescription)
 end
 
 populateHelpList = function()
-	clearHelpEntries()
-	exampleHelperTemplate.Visible = false
+	prepareDisplayListMode()
 
 	for index = 1, #Commands do
 		local cmd = Commands[index]
@@ -3492,8 +4325,7 @@ populateHelpList = function()
 end
 
 populatePlayerInfo = function(targetPlayer)
-	clearHelpEntries()
-	exampleHelperTemplate.Visible = false
+	prepareDisplayListMode()
 
 	local function createLine(label, value)
 		local entry = exampleHelperTemplate:Clone()
@@ -3532,12 +4364,11 @@ populatePlayerInfo = function(targetPlayer)
 	end
 
 	helperBg.Visible = true
-	print("[SUCCESS] Player info displayed", false)
+	print("[SUCCESS] Player info displayed")
 end
 
 populateTeamsList = function()
-	clearHelpEntries()
-	exampleHelperTemplate.Visible = false
+	prepareDisplayListMode()
 
 	for index, team in ipairs(game:GetService("Teams"):GetTeams()) do
 		local entry = exampleHelperTemplate:Clone()
@@ -3590,13 +4421,6 @@ local function fadeWelcomeOut()
 	title2.Visible = false
 	title3.Visible = false
 	STATE.welcomeFinished = true
-
-	-- AUTO OPEN MENU AFTER REJOIN
-	task.defer(function()
-		if not STATE.menuOpen then
-			openMenu()
-		end
-	end)
 end
 
 
@@ -3837,6 +4661,39 @@ local TAB_FILL_COMMANDS = {
 	clickdelete = "clickdelete",
 }
 
+local function splitCommandArguments(text)
+	text = tostring(text or "")
+
+	local args = {}
+	local current = {}
+	local inQuotes = false
+	local length = string.len(text)
+	local i = 1
+
+	while i <= length do
+		local char = text:sub(i, i)
+
+		if char == "\"" then
+			inQuotes = not inQuotes
+		elseif char == " " and not inQuotes then
+			if #current > 0 then
+				table.insert(args, table.concat(current))
+				table.clear(current)
+			end
+		else
+			table.insert(current, char)
+		end
+
+		i += 1
+	end
+
+	if #current > 0 then
+		table.insert(args, table.concat(current))
+	end
+
+	return args
+end
+
 local function executeCommand(commandText)
 	local cleaned = tostring(commandText or ""):gsub("^%s+", ""):gsub("%s+$", "")
 	if cleaned == "" then
@@ -3854,7 +4711,7 @@ local function executeCommand(commandText)
 
 		if lowered == cmdName or lowered:sub(1, #cmdName + 1) == cmdName .. " " then
 			local argsText = cleaned:sub(#cmd.Name + 1):gsub("^%s+", "")
-			local args = argsText ~= "" and string.split(argsText, " ") or nil
+			local args = argsText ~= "" and splitCommandArguments(argsText) or nil
 
 			if not PERSISTENT_HELP_COMMANDS[cmdName] then
 				hideHelpList()
@@ -3873,6 +4730,7 @@ local function executeCommand(commandText)
 
 			if not ok then
 				warn("Command execution failed for '" .. cmd.Name .. "': " .. tostring(err))
+				print("[FAIL] Command error:", tostring(err))
 			end
 
 			task.defer(function()
@@ -3884,6 +4742,8 @@ local function executeCommand(commandText)
 			return
 		end
 	end
+
+	print("[FAIL] Unknown command:", cleaned)
 
 	commandInput.Text = ""
 	commandInput.CursorPosition = -1
@@ -4470,6 +5330,7 @@ local function forceTopLayer(guiObject)
 end
 
 forceTopLayer(bg)
+forceTopLayer(outerChatModule)
 
 resetSuggester()
 bg.Visible = false
@@ -4477,6 +5338,8 @@ helperBg.Visible = false
 exampleHelperTemplate.Visible = false
 
 startGlobalPlayerTracking()
+startChatlogsSystem()
+initializeCoreGuiStates()
 
 if loadWaypoints() then
 	print("[SUCCESS] Loaded saved waypoints from file")
