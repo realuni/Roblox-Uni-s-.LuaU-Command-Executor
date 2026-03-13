@@ -5333,15 +5333,31 @@ addCommand("repeatlast", "Re-executes the last command you sent", function()
 end)
 
 addCommand("dex", "Loads the Dex Explorer tool", function()
+
 	print("[SUCCESS] Loading Dex Explorer...")
 
 	local success, err = pcall(function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/LorekeeperZinnia/Dex/master/main.lua"))()
+
+		local httpget = game.HttpGet or game.httpget
+		local loader = loadstring or load
+
+		if not httpget then
+			error("HttpGet not supported by this executor")
+		end
+
+		if not loader then
+			error("loadstring not supported by this executor")
+		end
+
+		local src = httpget(game, "https://raw.githubusercontent.com/LorekeeperZinnia/Dex/master/main.lua")
+		loader(src)()
+
 	end)
 
 	if not success then
 		print("[FAIL] Could not load Dex:", err)
 	end
+
 end)
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
