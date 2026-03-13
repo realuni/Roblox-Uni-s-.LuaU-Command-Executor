@@ -5332,6 +5332,18 @@ addCommand("repeatlast", "Re-executes the last command you sent", function()
 	executeCommand(last)
 end)
 
+addCommand("dex", "Loads the Dex Explorer tool", function()
+	print("[SUCCESS] Loading Dex Explorer...")
+
+	local success, err = pcall(function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/LorekeeperZinnia/Dex/master/main.lua"))()
+	end)
+
+	if not success then
+		print("[FAIL] Could not load Dex:", err)
+	end
+end)
+
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
 --////////////////////////////////////////////////////
@@ -5400,6 +5412,7 @@ local COMMAND_DISPLAY_NAMES = {
 	serverinfo = "serverinfo",
 	cmdhistory = "cmdhistory",
 	repeatlast = "repeatlast",
+	dex = "dex",
 }
 
 local originalTexts = {
