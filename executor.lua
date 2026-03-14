@@ -5824,8 +5824,9 @@ do
 		tween(UI.MainBg, 0.05, {BackgroundTransparency = 0.45})
 
 		task.defer(function()
-			if STATE.menuOpen then
+			if STATE.menuOpen and UI.CommandInput then
 				UI.CommandInput:CaptureFocus()
+				UI.CommandInput.CursorPosition = #UI.CommandInput.Text + 1
 			end
 		end)
 	end
@@ -5833,7 +5834,10 @@ do
 	closeMenu = function()
 		STATE.menuOpen = false
 		STATE.suppressRefocus = true
-		UI.CommandInput:ReleaseFocus()
+
+		if UI.CommandInput:IsFocused() then
+			UI.CommandInput:ReleaseFocus()
+		end
 
 		tween(UI.MainBg, 0.05, {BackgroundTransparency = 1}).Completed:Wait()
 
@@ -6015,7 +6019,37 @@ STATE.inputFocusLostConnection = UI.CommandInput.FocusLost:Connect(function(ente
 end)
 
 STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not gameProcessed and not UI.CommandInput:IsFocused() then
+	if input.KeyCode == Enum.KeyCode.Semicolon then
+		if not STATE.WelcomeFinished then
+			return
+		end
+
+		local focusedBox = UserInputService:GetFocusedTextBox()
+
+		if focusedBox and focusedBox ~= UI.CommandInput then
+			return
+		end
+
+		toggleMenu()
+
+		task.defer(function()
+			sanitizeCommandInput()
+			updateSuggestions()
+
+			if STATE.menuOpen then
+				UI.CommandInput:CaptureFocus()
+				UI.CommandInput.CursorPosition = #UI.CommandInput.Text + 1
+			end
+		end)
+
+		return
+	end
+
+	if gameProcessed then
+		return
+	end
+
+	if not UI.CommandInput:IsFocused() then
 		if STATE.clickTeleportActive and input.UserInputType == Enum.UserInputType.MouseButton1 then
 			if STATE.clickTeleportKey and UserInputService:IsKeyDown(STATE.clickTeleportKey) then
 				performClickTeleport()
@@ -6063,21 +6097,6 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 		end
 	end
 
-	if input.KeyCode == Enum.KeyCode.Semicolon then
-		if not STATE.WelcomeFinished then
-			return
-		end
-
-		toggleMenu()
-
-		task.defer(function()
-			sanitizeCommandInput()
-			updateSuggestions()
-		end)
-
-		return
-	end
-
 	if not STATE.menuOpen then
 		return
 	end
@@ -6090,10 +6109,6 @@ STATE.inputBeganConnection = UserInputService.InputBegan:Connect(function(input,
 			UI.CommandInput:CaptureFocus()
 			updateSuggestions()
 		end
-		return
-	end
-
-	if gameProcessed then
 		return
 	end
 end)
