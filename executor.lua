@@ -217,7 +217,7 @@ do
 						commandLine.Name = "CommandLine"
 						commandLine.BackgroundTransparency = 1
 						commandLine.BorderSizePixel = 0
-						commandLine.TextSize = 14
+						commandLine.TextSize = 17
 						commandLine.RichText = true
 						commandLine.Size = UDim2.new(1, -16, 1, 0)
 						commandLine.Position = UDim2.fromOffset(8, 0)
@@ -276,9 +276,9 @@ do
 			commandDescription.Name = "CommandDescription"
 			commandDescription.BackgroundTransparency = 1
 			commandDescription.BorderSizePixel = 0
-			commandDescription.TextSize = 14
+			commandDescription.TextSize = 17
 			commandDescription.TextWrapped = true
-			commandDescription.TextScaled = true
+			commandDescription.TextScaled = false
 			commandDescription.Position = UDim2.fromScale(0.0388, 0.3808)
 			commandDescription.Size = UDim2.fromScale(0.9269, 0.4666)
 			commandDescription.FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json")
@@ -510,7 +510,26 @@ do
 	main.Parent = commandExecutor
 end
 
-commandExecutor.Parent = PlayerGui
+local uiParent
+
+pcall(function()
+	if gethui then
+		uiParent = gethui()
+	end
+end)
+
+if not uiParent then
+	pcall(function()
+		uiParent = game:GetService("CoreGui")
+	end)
+end
+
+if not uiParent then
+	uiParent = PlayerGui
+end
+
+commandExecutor.Parent = uiParent
+
 local existingChatModule = commandExecutor:FindFirstChild("Main") and commandExecutor.Main:FindFirstChild("ChatModule")
 if existingChatModule then
 	existingChatModule.Visible = false
@@ -3950,13 +3969,15 @@ _G.print = executorPrint
 
 local Commands = {}
 
-local function addCommand(name, description, execute)
+local function addCommand(name, description, execute, category)
 	Commands[#Commands + 1] = {
 		Name = name,
 		Description = description,
-		Execute = execute
+		Execute = execute,
+		Category = string.lower(category or "utility")
 	}
 end
+
 
 addCommand("esp", "Displays a customizable nametag above every player displaying their username, health and distance from you in studs", function(distance)
 	if distance == nil or tostring(distance):match("^%s*$") then
@@ -3971,12 +3992,12 @@ addCommand("esp", "Displays a customizable nametag above every player displaying
 
 	print("[SUCCESS] Nametag render distance set to:", distance == math.huge and "infinite" or distance, "studs")
 	startNametagSystem(distance)
-end)
+end, "visual")
 
 addCommand("unesp", "Turns off the customizable nametags above every player displaying their username, health and distance from you in studs.", function()
 	print("[SUCCESS] Nametag system disabled")
 	stopNametagSystem()
-end)
+end, "visual")
 
 addCommand("tpwalk", "Makes your character walk faster without speeding up any animations, usage: 'tpwalk 0.25' for a slight boost", function(multiplier)
 	multiplier = tonumber(multiplier)
@@ -3987,12 +4008,12 @@ addCommand("tpwalk", "Makes your character walk faster without speeding up any a
 
 	print("[SUCCESS] Tpwalk enabled with multiplier:", multiplier)
 	startTpWalk(multiplier)
-end)
+end, "movement")
 
 addCommand("untpwalk", "Removes any previously granted 'tpwalk' functions to the players character if there were any", function()
 	print("[SUCCESS] Tpwalk disabled")
 	stopTpWalk()
-end)
+end, "movement")
 
 addCommand("blink", "Teleports you x studs towards the direction your character is looking at.", function(distance)
 	distance = tonumber(distance)
@@ -4019,7 +4040,7 @@ addCommand("blink", "Teleports you x studs towards the direction your character 
 	rootPart.CFrame = CFrame.new(rootPart.Position + flatForward * distance, rootPart.Position + flatForward * (distance + 1))
 
 	print("[SUCCESS] Teleported", distance, "studs forward")
-end)
+end, "movement")
 
 addCommand("hitbox", "Multiplies the hitbox area of the selected player or team, usage: 'hitbox username 2' or 'hitbox Engineering Department 2'", function(...)
 	local args = {...}
@@ -4087,12 +4108,12 @@ addCommand("hitbox", "Multiplies the hitbox area of the selected player or team,
 	STATE.hitboxSystemEnabled = true
 	applyHitboxToPlayer(targetPlayer, multiplier)
 	print("[SUCCESS] Applied hitbox multiplier", multiplier, "to player:", targetPlayer.Name)
-end)
+end, "utility")
 
 addCommand("resethitboxes", "Removes any previously expanded hitboxes to player characters if there were any", function()
 	resetAllHitboxes()
 	print("[SUCCESS] Reset all expanded hitboxes")
-end)
+end, "utility")
 
 addCommand("respawn", "Resets your roblox character - Sets your humanoid health to 0", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -4103,7 +4124,7 @@ addCommand("respawn", "Resets your roblox character - Sets your humanoid health 
 
 	humanoid.Health = 0
 	print("[SUCCESS] Character respawned")
-end)
+end, "utility")
 
 addCommand("rejoin", "Rejoins the same server and re-executes the script if supported by your executor", function()
 	executorPrint("[SUCCESS] Rejoining server...")
@@ -4118,7 +4139,7 @@ addCommand("rejoin", "Rejoins the same server and re-executes the script if supp
 	end
 
 	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
-end)
+end, "utility")
 
 addCommand("highlight", "Highlights the specified players making them visible through walls, and displaying their animations in real time", function(targetName, distance)
 	targetName = tostring(targetName or "")
@@ -4176,17 +4197,23 @@ addCommand("highlight", "Highlights the specified players making them visible th
 
 	highlightPlayer(targetPlayer)
 	print("[SUCCESS] Applied highlight to player:", targetPlayer.Name)
-end)
+end, "visual")
 
 addCommand("unhighlight", "Removes any previously added highlight effects to every player if there were any", function()
 	resetAllHighlights()
 	print("[SUCCESS] Removed all highlights")
-end)
+end, "visual")
 
-addCommand("help", "Shows all of the executable modules and briefly explains how they all work", function()
-	print("[SUCCESS] Help list displayed")
-	populateHelpList()
-end)
+addCommand("help", "Shows all commands, or only one category. Usage: help or help movement", function(category)
+	if category and tostring(category):match("%S") then
+		populateHelpList(category)
+		print("[SUCCESS] Help category displayed:", tostring(category))
+	else
+		populateHelpList()
+		print("[SUCCESS] Full help list displayed")
+	end
+end, "utility")
+
 
 addCommand("goto", "Teleports your player to the specified player, usage: 'goto username'", function(username)
 	if not username or username == "" then
@@ -4215,7 +4242,7 @@ addCommand("goto", "Teleports your player to the specified player, usage: 'goto 
 
 	root.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
 	print("[SUCCESS] Teleported to player:", target.Name)
-end)
+end, "utility")
 
 addCommand("view", "Teleports your player camera to the specified player, usage: 'view username'", function(username)
 	if not username or username == "" then
@@ -4244,7 +4271,7 @@ addCommand("view", "Teleports your player camera to the specified player, usage:
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = target
 	print("[SUCCESS] Now viewing player:", target.Name)
-end)
+end, "utility")
 
 addCommand("unview", "Teleports your player camera back to you, if you are spectating someone", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -4263,7 +4290,7 @@ addCommand("unview", "Teleports your player camera back to you, if you are spect
 	camera.CameraSubject = humanoid
 	STATE.viewingPlayer = nil
 	print("[SUCCESS] Camera returned to your character")
-end)
+end, "utility")
 
 addCommand("noclip", "Disables all collisions for your local player essentially letting you walk through walls", function()
 	if STATE.noclipEnabled then
@@ -4286,7 +4313,7 @@ addCommand("noclip", "Disables all collisions for your local player essentially 
 	end)
 
 	print("[SUCCESS] Noclip enabled")
-end)
+end, "player")
 
 addCommand("clip", "Disables the noclip function", function()
 	if not STATE.noclipEnabled then
@@ -4311,7 +4338,7 @@ addCommand("clip", "Disables the noclip function", function()
 	end
 
 	print("[SUCCESS] Noclip disabled")
-end)
+end, "player")
 
 addCommand("sit", "Forces your player to sit on the nearest ground, to unsit simply jump once", function()
 	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -4322,7 +4349,7 @@ addCommand("sit", "Forces your player to sit on the nearest ground, to unsit sim
 
 	humanoid.Sit = true
 	print("[SUCCESS] Character sitting")
-end)
+end, "player")
 
 addCommand("fov", "Changes local fov (field of view), usage: 'fov 80'", function(amount)
 	if not amount or amount == "" then
@@ -4338,12 +4365,12 @@ addCommand("fov", "Changes local fov (field of view), usage: 'fov 80'", function
 
 	print("[SUCCESS] FOV set to:", numAmount)
 	startCustomFov(amount)
-end)
+end, "player")
 
 addCommand("resetfov", "Resets your local fov to the default one set by the owner of this experience", function()
 	print("[SUCCESS] FOV reset to default")
 	stopCustomFov()
-end)
+end, "player")
 
 addCommand("fly", "Lets you fly around the game, usage: 'fly 100' For a decently fast flight, to unfly just execute the command 'unfly'", function(speed)
 	if STATE.menuOpen then
@@ -4357,7 +4384,7 @@ addCommand("fly", "Lets you fly around the game, usage: 'fly 100' For a decently
 
 	print("[SUCCESS] Fly enabled")
 	startFly(speed)
-end)
+end, "player")
 
 addCommand("unfly", "Stops your character from flying any longer unless you use the fly command again", function()
 	if not STATE.flyEnabled then
@@ -4367,7 +4394,7 @@ addCommand("unfly", "Stops your character from flying any longer unless you use 
 
 	print("[SUCCESS] Fly disabled")
 	stopFly()
-end)
+end, "player")
 
 addCommand("tracers", "Draws tracers, each one leading to different player, - tracer color is based on the players team color", function(distance)
 	if STATE.tracersEnabled then
@@ -4377,7 +4404,7 @@ addCommand("tracers", "Draws tracers, each one leading to different player, - tr
 
 	print("[SUCCESS] Tracers enabled")
 	startTracers(distance)
-end)
+end, "visual")
 
 addCommand("untracers", "Disables the tracers, each one leading to different player, - tracer color is based on the players team color", function()
 	if not STATE.tracersEnabled then
@@ -4387,7 +4414,7 @@ addCommand("untracers", "Disables the tracers, each one leading to different pla
 
 	print("[SUCCESS] Tracers disabled")
 	stopTracers()
-end)
+end, "visual")
 
 addCommand("freecam", "Lets you fly around in sort of a spectator mode, cool minecraft reference huh?", function(speed)
 	if STATE.freecamEnabled then
@@ -4397,7 +4424,7 @@ addCommand("freecam", "Lets you fly around in sort of a spectator mode, cool min
 
 	print("[SUCCESS] Freecam enabled")
 	startFreecam(speed)
-end)
+end, "utility")
 
 addCommand("unfreecam", "Destroys your freecam and puts your camera back to your character", function()
 	if not STATE.freecamEnabled then
@@ -4407,7 +4434,7 @@ addCommand("unfreecam", "Destroys your freecam and puts your camera back to your
 
 	print("[SUCCESS] Freecam disabled")
 	stopFreecam()
-end)
+end, "utility")
 
 addCommand("walkspeed", "Increases your walkspeed accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
@@ -4423,12 +4450,12 @@ addCommand("walkspeed", "Increases your walkspeed accordingly to what you specif
 
 	print("[SUCCESS] Walkspeed set to:", numAmount)
 	setWalkSpeed(amount)
-end)
+end, "player")
 
 addCommand("resetwalkspeed", "Resets your characters walkspeed to a default one set by the owner of this experience", function()
 	print("[SUCCESS] Walkspeed reset to default")
 	resetWalkSpeed()
-end)
+end, "player")
 
 addCommand("jumpheight", "Increases your jumpheight accordingly to what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
@@ -4444,12 +4471,12 @@ addCommand("jumpheight", "Increases your jumpheight accordingly to what you spec
 
 	print("[SUCCESS] Jumpheight set to:", numAmount)
 	setJumpHeight(amount)
-end)
+end, "player")
 
 addCommand("resetjumpheight", "Resets your characters jumpheight to a default one set by the owner of this experience", function()
 	print("[SUCCESS] Jumpheight reset to default")
 	resetJumpHeight()
-end)
+end, "player")
 
 addCommand("fullbright", "Illuminates your whole game, this is useful for playing at night!", function()
 	if STATE.fullbrightEnabled then
@@ -4459,7 +4486,7 @@ addCommand("fullbright", "Illuminates your whole game, this is useful for playin
 
 	print("[SUCCESS] Fullbright enabled")
 	startFullbright()
-end)
+end, "visual")
 
 addCommand("unfullbright", "Resets the brightness to the default one set by the owner of this experience", function()
 	if not STATE.fullbrightEnabled then
@@ -4469,7 +4496,7 @@ addCommand("unfullbright", "Resets the brightness to the default one set by the 
 
 	print("[SUCCESS] Fullbright disabled")
 	stopFullbright()
-end)
+end, "visual")
 
 addCommand("esphighlight", "Combines both the esp and the highlight functions!", function(distance)
 	if distance == nil or tostring(distance):match("^%s*$") then
@@ -4496,13 +4523,13 @@ addCommand("esphighlight", "Combines both the esp and the highlight functions!",
 
 	updateHighlightVisibility()
 	print("Enabled esphighlight with distance:", distance == math.huge and "infinite" or distance)
-end)
+end, "visual")
 
 addCommand("unesphighlight", "Disables the combination of both the esp and the highlight functions!", function()
 	stopNametagSystem()
 	resetAllHighlights()
 	print("Disabled esphighlight")
-end)
+end, "visual")
 
 addCommand("maxzoom", "Changes your camera's max zoom distance based on what you specify within the command prompt", function(amount)
 	if not amount or amount == "" then
@@ -4518,22 +4545,22 @@ addCommand("maxzoom", "Changes your camera's max zoom distance based on what you
 
 	LocalPlayer.CameraMaxZoomDistance = amount
 	print("[SUCCESS] Max zoom distance set to:", amount)
-end)
+end, "player")
 
 addCommand("defaultzoom", "Changes your camera's max zoom distance to the default settings set by the owner of this experience.", function()
 	LocalPlayer.CameraMaxZoomDistance = STATE.defaultCameraMaxZoom
 	print("[SUCCESS] Camera zoom reset to default:", STATE.defaultCameraMaxZoom)
-end)
+end, "player")
 
 addCommand("teams", "Shows every team that exists in this experience", function()
 	print("[SUCCESS] Teams list displayed")
 	populateTeamsList()
-end)
+end, "utility")
 
 addCommand("destroy", "Destroys the entire system leaving no trace of use!", function()
 	print("[SUCCESS] Executor system destroyed")
 	destroyExecutorSystem()
-end)
+end, "system")
 
 addCommand("hitboxtransparency", "Changes the transparency of player humanoid root parts (0-1), usage: hitboxtransparency {amount} {player/team/all}", function(...)
 	local args = {...}
@@ -4595,7 +4622,7 @@ addCommand("hitboxtransparency", "Changes the transparency of player humanoid ro
 	STATE.hitboxTransparencyPlayers[targetPlayer.UserId] = amount
 	applyStoredHitboxTransparency(targetPlayer)
 	print("Hitbox transparency set to", amount, "for player:", targetPlayer.Name)
-end)
+end, "visual")
 
 addCommand("bind", "Binds a command to the specified key, usage: bind {key} {command}", function(...)
 	local args = {...}
@@ -4649,7 +4676,7 @@ addCommand("bind", "Binds a command to the specified key, usage: bind {key} {com
 
 	saveBinds()
 	print("[SUCCESS] Bound key", keyName, "to command:", commandText)
-end)
+end, "binds")
 
 addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	if not key or key == "" then
@@ -4676,7 +4703,7 @@ addCommand("unbind", "Removes a keybind, usage: unbind {key}", function(key)
 	saveBinds()
 
 	print("[SUCCESS] Unbound key:", keyName)
-end)
+end, "binds")
 
 addCommand("binds", "Lets you view all of your previously created binds.", function()
 	prepareDisplayListMode()
@@ -4719,7 +4746,7 @@ addCommand("binds", "Lets you view all of your previously created binds.", funct
 
 	helperBg.Visible = true
 	print("[SUCCESS] Binds list displayed")
-end)
+end, "binds")
 
 addCommand("clearbinds", "Clears all of your previously created binds", function()
 	table.clear(STATE.keybinds)
@@ -4728,7 +4755,7 @@ addCommand("clearbinds", "Clears all of your previously created binds", function
 	saveBinds()
 
 	print("[SUCCESS] All binds cleared")
-end)
+end, "binds")
 
 addCommand("togglebind", "Binds a toggleable command to the specified key", function(...)
 	local args = {...}
@@ -4796,7 +4823,7 @@ addCommand("togglebind", "Binds a toggleable command to the specified key", func
 
 	saveBinds()
 	print("[SUCCESS] Toggle bind created:", keyName, "->", matchedCommand)
-end)
+end, "binds")
 
 addCommand("waypointcreate", "Creates a waypoint at your current position with the specified name", function(...)
 	local args = {...}
@@ -4829,7 +4856,7 @@ addCommand("waypointcreate", "Creates a waypoint at your current position with t
 	else
 		print("[SUCCESS] Waypoint created (not saved - executor API unavailable):", waypointName)
 	end
-end)
+end, "utility")
 
 addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	local args = {...}
@@ -4880,7 +4907,7 @@ addCommand("waypointdelete", "Deletes the specified waypoint", function(...)
 	else
 		print("[SUCCESS] Waypoint deleted (not saved - executor API unavailable):", waypointName)
 	end
-end)
+end, "utility")
 
 addCommand("waypoints", "Shows all created waypoints", function()
 	prepareDisplayListMode()
@@ -4910,7 +4937,7 @@ addCommand("waypoints", "Shows all created waypoints", function()
 
 	helperBg.Visible = true
 	print("[SUCCESS] Waypoints list displayed")
-end)
+end, "utility")
 
 addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(...)
 	local args = {...}
@@ -4938,7 +4965,7 @@ addCommand("gotowaypoint", "Teleports you to the specified waypoint", function(.
 
 	root.CFrame = CFrame.new(STATE.waypoints[waypointName])
 	print("[SUCCESS] Teleported to waypoint:", waypointName)
-end)
+end, "utility")
 
 addCommand("savewaypoints", "Manually saves all waypoints to file", function()
 	if saveWaypoints() then
@@ -4946,7 +4973,7 @@ addCommand("savewaypoints", "Manually saves all waypoints to file", function()
 	else
 		print("[FAIL] Could not save waypoints - executor API unavailable")
 	end
-end)
+end, "utility")
 
 addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-based transparency", function()
 	if STATE.waypointShowEnabled and next(STATE.waypointMarkers) ~= nil then
@@ -4972,7 +4999,7 @@ addCommand("showwaypoints", "Shows 3D markers for all waypoints with distance-ba
 	startWaypointRendering()
 
 	print("[SUCCESS] Showing waypoint markers for", count, "waypoints")
-end)
+end, "utility")
 
 addCommand("hidewaypoints", "Hides all waypoint markers", function()
 	if not STATE.waypointShowEnabled then
@@ -4983,7 +5010,7 @@ addCommand("hidewaypoints", "Hides all waypoint markers", function()
 	stopWaypointRendering()
 	destroyWaypointMarkers()
 	print("[SUCCESS] Hid all waypoint markers")
-end)
+end, "utility")
 
 addCommand("playerinfo", "Displays detailed information about the specified player", function(username)
 	if not username or username == "" then
@@ -4998,20 +5025,20 @@ addCommand("playerinfo", "Displays detailed information about the specified play
 	end
 
 	populatePlayerInfo(target)
-end)
+end, "utility")
 
 addCommand("clickteleport", "Ghost command - Teleports you to where you click when holding the bound key. Must be bound using the bind command.", function()
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickteleport")
-end)
+end, "player")
 
 addCommand("clickdelete", "Ghost command - Deletes the object you click when holding the bound key. Must be bound using the bind command.", function()
 	print("[FAIL] This is a ghost command. You must bind it to a key first using: bind {key} clickdelete")
-end)
+end, "player")
 
 addCommand("chatlogs", "Opens a draggable chat logs window which shows up to 1000 player messages from newest to oldest", function()
 	openChatLogs()
 	print("[SUCCESS] Chat logs opened")
-end)
+end, "utility")
 
 addCommand("strengthen", "Lets you push unanchored parts much more smoothly, usage: strengthen {multiplier} or strengthen inf", function(multiplier)
 	if not multiplier or multiplier == "" then
@@ -5034,7 +5061,7 @@ addCommand("strengthen", "Lets you push unanchored parts much more smoothly, usa
 
 	startStrength(num)
 	print("[SUCCESS] Strength multiplier set to:", num)
-end)
+end, "player")
 
 addCommand("unstrengthen", "Disables the strengthen system and restores normal pushing", function()
 	if not STATE.strengthEnabled then
@@ -5044,23 +5071,23 @@ addCommand("unstrengthen", "Disables the strengthen system and restores normal p
 
 	stopStrength()
 	print("[SUCCESS] Strengthen disabled")
-end)
+end, "player")
 
 addCommand("enableleaderboards", "Enables the built-in Roblox leaderboard/player list locally", function()
 	setLeaderboardsEnabled(true)
-end)
+end, "utility")
 
 addCommand("disableleaderboards", "Disables the built-in Roblox leaderboard/player list locally", function()
 	setLeaderboardsEnabled(false)
-end)
+end, "utility")
 
 addCommand("enablerespawn", "Enables the built-in Roblox reset character option locally", function()
 	setRespawnEnabled(true)
-end)
+end, "utility")
 
 addCommand("disablerespawn", "Disables the built-in Roblox reset character option locally", function()
 	setRespawnEnabled(false)
-end)
+end, "utility")
 
 addCommand("gravity", "Multiplies the current workspace gravity, usage: gravity {multiplier}", function(multiplier)
 	if not multiplier or multiplier == "" then
@@ -5076,12 +5103,12 @@ addCommand("gravity", "Multiplies the current workspace gravity, usage: gravity 
 
 	setGravityMultiplier(num)
 	print("[SUCCESS] Gravity multiplier set to:", num, "->", workspace.Gravity)
-end)
+end, "player")
 
 addCommand("resetgravity", "Resets gravity back to the original value", function()
 	resetGravity()
 	print("[SUCCESS] Gravity reset to:", workspace.Gravity)
-end)
+end, "player")
 
 addCommand("hipheight", "Sets your humanoid hip height, usage: hipheight {amount}", function(amount)
 	if not amount or amount == "" then
@@ -5097,12 +5124,12 @@ addCommand("hipheight", "Sets your humanoid hip height, usage: hipheight {amount
 
 	setHipHeight(num)
 	print("[SUCCESS] HipHeight set to:", num)
-end)
+end, "player")
 
 addCommand("resethipheight", "Resets your humanoid hip height to the original value", function()
 	resetHipHeight()
 	print("[SUCCESS] HipHeight reset")
-end)
+end, "player")
 
 addCommand("infjump", "Lets you jump infinitely without needing to touch the ground", function()
 	if STATE.infJumpEnabled then
@@ -5112,7 +5139,7 @@ addCommand("infjump", "Lets you jump infinitely without needing to touch the gro
 
 	startInfJump()
 	print("[SUCCESS] Infjump enabled")
-end)
+end, "player")
 
 addCommand("uninfjump", "Disables infjump", function()
 	if not STATE.infJumpEnabled then
@@ -5122,7 +5149,7 @@ addCommand("uninfjump", "Disables infjump", function()
 
 	stopInfJump()
 	print("[SUCCESS] Infjump disabled")
-end)
+end, "player")
 
 addCommand("antiafk", "Prevents your client from idling out", function()
 	if STATE.antiAfkEnabled then
@@ -5132,7 +5159,7 @@ addCommand("antiafk", "Prevents your client from idling out", function()
 
 	startAntiAfk()
 	print("[SUCCESS] Antiafk enabled")
-end)
+end, "utility")
 
 addCommand("unantiafk", "Disables antiafk", function()
 	if not STATE.antiAfkEnabled then
@@ -5142,7 +5169,7 @@ addCommand("unantiafk", "Disables antiafk", function()
 
 	stopAntiAfk()
 	print("[SUCCESS] Antiafk disabled")
-end)
+end, "utility")
 
 addCommand("xray", "Makes most world parts semi-transparent locally so you can see through them", function()
 	if STATE.xrayEnabled then
@@ -5152,7 +5179,7 @@ addCommand("xray", "Makes most world parts semi-transparent locally so you can s
 
 	startXray()
 	print("[SUCCESS] Xray enabled")
-end)
+end, "visual")
 
 addCommand("unxray", "Disables xray and restores normal local visibility", function()
 	if not STATE.xrayEnabled then
@@ -5162,7 +5189,7 @@ addCommand("unxray", "Disables xray and restores normal local visibility", funct
 
 	stopXray()
 	print("[SUCCESS] Xray disabled")
-end)
+end, "visual")
 
 addCommand("hideparticles", "Hides particle emitters and trails locally", function()
 	if STATE.particlesHidden then
@@ -5172,7 +5199,7 @@ addCommand("hideparticles", "Hides particle emitters and trails locally", functi
 
 	startHideParticles()
 	print("[SUCCESS] Particles hidden")
-end)
+end, "visual")
 
 addCommand("showparticles", "Shows particle emitters and trails again", function()
 	if not STATE.particlesHidden then
@@ -5182,7 +5209,7 @@ addCommand("showparticles", "Shows particle emitters and trails again", function
 
 	stopHideParticles()
 	print("[SUCCESS] Particles restored")
-end)
+end, "visual")
 
 addCommand("hideeffects", "Hides common visual effects locally", function()
 	if STATE.effectsHidden then
@@ -5192,7 +5219,7 @@ addCommand("hideeffects", "Hides common visual effects locally", function()
 
 	startHideEffects()
 	print("[SUCCESS] Effects hidden")
-end)
+end, "visual")
 
 addCommand("showeffects", "Shows common visual effects again", function()
 	if not STATE.effectsHidden then
@@ -5202,7 +5229,7 @@ addCommand("showeffects", "Shows common visual effects again", function()
 
 	stopHideEffects()
 	print("[SUCCESS] Effects restored")
-end)
+end, "visual")
 
 addCommand("disabletextures", "Removes textures locally and forces part materials to SmoothPlastic", function()
 	if STATE.texturesDisabled then
@@ -5212,7 +5239,7 @@ addCommand("disabletextures", "Removes textures locally and forces part material
 
 	startDisableTextures()
 	print("[SUCCESS] Textures disabled")
-end)
+end, "visual")
 
 addCommand("enabletextures", "Restores textures and original materials locally", function()
 	if not STATE.texturesDisabled then
@@ -5222,7 +5249,7 @@ addCommand("enabletextures", "Restores textures and original materials locally",
 
 	stopDisableTextures()
 	print("[SUCCESS] Textures restored")
-end)
+end, "visual")
 
 addCommand("antivoid", "Teleports you back up if you fall below the safe Y threshold", function()
 	if STATE.antiVoidEnabled then
@@ -5232,7 +5259,7 @@ addCommand("antivoid", "Teleports you back up if you fall below the safe Y thres
 
 	startAntiVoid()
 	print("[SUCCESS] Antivoid enabled")
-end)
+end, "utility")
 
 addCommand("unantivoid", "Disables antivoid protection", function()
 	if not STATE.antiVoidEnabled then
@@ -5242,7 +5269,7 @@ addCommand("unantivoid", "Disables antivoid protection", function()
 
 	stopAntiVoid()
 	print("[SUCCESS] Antivoid disabled")
-end)
+end, "utility")
 
 addCommand("hideui", "Hides most game UI locally while keeping the executor alive", function()
 	if STATE.uiHidden then
@@ -5252,7 +5279,7 @@ addCommand("hideui", "Hides most game UI locally while keeping the executor aliv
 
 	startHideUi()
 	print("[SUCCESS] UI hidden")
-end)
+end, "utility")
 
 addCommand("showui", "Restores previously hidden UI", function()
 	if not STATE.uiHidden then
@@ -5262,7 +5289,7 @@ addCommand("showui", "Restores previously hidden UI", function()
 
 	stopHideUi()
 	print("[SUCCESS] UI restored")
-end)
+end, "utility")
 
 addCommand("nofog", "Removes local fog by pushing FogStart/FogEnd very far away", function()
 	if STATE.fogModified then
@@ -5272,7 +5299,7 @@ addCommand("nofog", "Removes local fog by pushing FogStart/FogEnd very far away"
 
 	startNoFog()
 	print("[SUCCESS] Nofog enabled")
-end)
+end, "utility")
 
 addCommand("resetfog", "Restores the original local fog settings", function()
 	if not STATE.fogModified then
@@ -5282,7 +5309,7 @@ addCommand("resetfog", "Restores the original local fog settings", function()
 
 	stopNoFog()
 	print("[SUCCESS] Fog restored")
-end)
+end, "utility")
 
 addCommand("edgejump", "Automatically jumps for you when you run off an edge", function()
 	if STATE.edgeJumpEnabled then
@@ -5294,7 +5321,7 @@ addCommand("edgejump", "Automatically jumps for you when you run off an edge", f
 	if STATE.edgeJumpEnabled then
 		print("[SUCCESS] Edgejump enabled")
 	end
-end)
+end, "player")
 
 addCommand("unedgejump", "Disables the automatic edge jump system", function()
 	if not STATE.edgeJumpEnabled then
@@ -5304,17 +5331,17 @@ addCommand("unedgejump", "Disables the automatic edge jump system", function()
 
 	stopEdgeJump()
 	print("[SUCCESS] Edgejump disabled")
-end)
+end, "player")
 
 addCommand("serverinfo", "Displays local server/session information using the helper panel", function()
 	showServerInfo()
 	print("[SUCCESS] Server info displayed")
-end)
+end, "utility")
 
 addCommand("cmdhistory", "Shows your executed command history using the helper panel", function()
 	showCommandHistory()
 	print("[SUCCESS] Command history displayed")
-end)
+end, "system")
 
 addCommand("repeatlast", "Re-executes the last command you sent", function()
 	local last = STATE.lastExecutedCommand
@@ -5330,7 +5357,7 @@ addCommand("repeatlast", "Re-executes the last command you sent", function()
 
 	print("[SUCCESS] Re-executing:", last)
 	executeCommand(last)
-end)
+end, "system")
 
 addCommand("dex", "Loads the Dex Explorer tool", function()
 
@@ -5358,7 +5385,7 @@ addCommand("dex", "Loads the Dex Explorer tool", function()
 		print("[FAIL] Could not load Dex:", err)
 	end
 
-end)
+end, "utility")
 
 --\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 -- HELPERS
@@ -5459,13 +5486,135 @@ local function buildHelpEntryText(commandName, commandDescription)
 	)
 end
 
-populateHelpList = function()
+--
+
+--
+
+--\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+-- CATEGORY FUNCTIONS
+--////////////////////////////////////////////////////
+
+STATE.helpCategoryOrder = {
+	"movement",
+	"visual",
+	"player",
+	"waypoints",
+	"binds",
+	"utility",
+	"system",
+}
+
+STATE.helpCategoryTitles = {
+	movement = "MOVEMENT",
+	visual = "VISUAL",
+	player = "PLAYER",
+	waypoints = "WAYPOINTS",
+	binds = "BINDS",
+	utility = "UTILITY",
+	system = "SYSTEM",
+}
+
+STATE.createHelpHeader = function(text)
+	local entry = exampleHelperTemplate:Clone()
+	entry.Name = "HelpHeader_" .. tostring(text)
+	entry.Visible = true
+	entry.Parent = helperScrollingFrame
+	entry.Size = UDim2.new(1, 0, 0, 28)
+	entry.BackgroundTransparency = 0.2
+	entry.BackgroundColor3 = Color3.fromRGB(22, 23, 27)
+
+	local label = entry:FindFirstChild("CommandLine")
+	if label then
+		label.RichText = true
+		label.Text = string.format(
+			"<font color=\"rgb(255,255,255)\"><b>[%s]</b></font>",
+			tostring(text)
+		)
+	end
+
+	return entry
+end
+
+STATE.createHelpCommandEntry = function(commandName, commandDescription, index)
+	local entry = exampleHelperTemplate:Clone()
+	entry.Name = "HelpEntry_" .. tostring(index)
+	entry.Visible = true
+	entry.Parent = helperScrollingFrame
+	entry.Size = UDim2.new(1, 0, 0, 28)
+
+	local label = entry:FindFirstChild("CommandLine")
+	if label then
+		label.RichText = true
+		label.Text = buildHelpEntryText(commandName, commandDescription)
+	end
+
+	return entry
+end
+
+STATE.getCommandsGroupedByCategory = function()
+	local grouped = {}
+
+	for _, category in ipairs(STATE.helpCategoryOrder) do
+		grouped[category] = {}
+	end
+
+	for i = 1, #Commands do
+		local cmd = Commands[i]
+		local category = string.lower(cmd.Category or "utility")
+
+		if not grouped[category] then
+			grouped[category] = {}
+		end
+
+		table.insert(grouped[category], cmd)
+	end
+
+	for _, categoryList in pairs(grouped) do
+		table.sort(categoryList, function(a, b)
+			return string.lower(a.Name) < string.lower(b.Name)
+		end)
+	end
+
+	return grouped
+end
+
+
+--
+
+--
+
+populateHelpList = function(categoryFilter)
 	prepareDisplayListMode()
 
-	for index = 1, #Commands do
-		local cmd = Commands[index]
+	categoryFilter = string.lower(tostring(categoryFilter or ""))
+
+	local grouped = STATE.getCommandsGroupedByCategory()
+	local createdAnything = false
+	local entryIndex = 0
+
+	for _, category in ipairs(STATE.helpCategoryOrder) do
+		local commandsInCategory = grouped[category]
+
+		if commandsInCategory and #commandsInCategory > 0 then
+			if categoryFilter == "" or category == categoryFilter then
+				STATE.createHelpHeader(STATE.helpCategoryTitles[category] or string.upper(category))
+				createdAnything = true
+
+				for _, cmd in ipairs(commandsInCategory) do
+					entryIndex += 1
+					STATE.createHelpCommandEntry(
+						getCommandDisplayNameForHelp(cmd),
+						cmd.Description,
+						entryIndex
+					)
+				end
+			end
+		end
+	end
+
+	if not createdAnything then
 		local entry = exampleHelperTemplate:Clone()
-		entry.Name = "HelpEntry_" .. index
+		entry.Name = "HelpEntry_None"
 		entry.Visible = true
 		entry.Parent = helperScrollingFrame
 		entry.Size = UDim2.new(1, 0, 0, 28)
@@ -5473,12 +5622,16 @@ populateHelpList = function()
 		local label = entry:FindFirstChild("CommandLine")
 		if label then
 			label.RichText = true
-			label.Text = buildHelpEntryText(getCommandDisplayNameForHelp(cmd), cmd.Description)
+			label.Text = string.format(
+				"<font color=\"rgb(227,227,227)\">No help category found for '%s'.</font>",
+				tostring(categoryFilter)
+			)
 		end
 	end
 
 	helperBg.Visible = true
 end
+
 
 populatePlayerInfo = function(targetPlayer)
 	prepareDisplayListMode()
@@ -6492,8 +6645,8 @@ local function bootExecutor()
 		end
 	end
 
-	forceTopLayer(bg)
-	forceTopLayer(outerChatModule)
+	forceTopLayer(commandExecutor)
+
 
 	resetSuggester()
 	bg.Visible = false
